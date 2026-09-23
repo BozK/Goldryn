@@ -1,0 +1,117 @@
+# Goldryn — Backend API Design (Phase 1)
+
+**Framework:** FastAPI
+**Auth model:** Single-user, cookie-based sessions, no `users` table — credentials come from environment variables in Prod.
+
+## Endpoints
+
+### Auth
+
+```
+POST   /api/auth/login
+POST   /api/auth/logout
+GET    /api/me
+```
+
+### Items
+
+```
+GET    /api/items              # landing page list
+GET    /api/items/{id}         # detail view (item + notes + maintenance_records)
+POST   /api/items              # create
+PATCH  /api/items/{id}         # partial update (name, color, cadence_days, next_maintenance_notes)
+DELETE /api/items/{id}         # soft delete (sets archived_at)
+```
+
+### Notes
+
+```
+POST   /api/items/{id}/notes
+PATCH  /api/notes/{id}
+DELETE /api/notes/{id}
+```
+
+### Maintenance Records
+
+```
+POST   /api/items/{id}/maintenance_records
+PATCH  /api/maintenance_records/{id}
+DELETE /api/maintenance_records/{id}
+```
+
+**Explicitly deferred to Phase 2:** tags (`GET/POST /api/tags`, attach/detach on an item), and search.
+
+## Response shapes
+
+**`GET /api/items`** — one row per active item:
+
+```json
+{
+  "id": 1,
+  "name": "Water filter",
+  "color": "blue",
+  "cadence_days": 90,
+  "next_due": "2026-11-15"   // null if no cadence or no maintenance history yet
+}
+```
+
+**`GET /api/items/{id}`** — everything else, in full:
+
+```json
+{
+  "id": 1,
+  "name": "Water filter",
+  "color": "blue",
+  "cadence_days": 90,
+  "next_maintenance_notes": "Need a 3rd-party filter, not OEM",
+  "created_at": "2026-01-04T12:00:00Z",
+  "notes": [ { "id": 1, "body": "...", "created_at": "..." } ],
+  "maintenance_records": [
+    { "id": 1, "date": "2026-08-15", "summary": "...", "cost": 45.00, "contractor_info": "..." }
+  ]
+}
+```
+
+## Design notes
+
+- **`next_due` is computed server-side, not sent as raw components.** The frontend never re-derives it from `cadence_days` + last maintenance date — one source of truth for the calculation. `GET /api/items` query:
+
+  ```sql
+  SELECT i.id, i.name, i.color, i.cadence_days,
+         MAX(m.date) AS last_maintenance_date
+  FROM items i
+  LEFT JOIN maintenance_records m ON m.item_id = i.id
+  WHERE i.archived_at IS NULL
+  GROUP BY i.id
+  ```
+
+  `LEFT JOIN` is required here — an `INNER JOIN` would silently drop any item that has never had a maintenance record logged. `next_due = last_maintenance_date + cadence_days` is then computed in the route handler; `None` if either input is missing.
+
+- **Auth mirrors the ClipBackend reference, minus the `Users` table.** Username and password are compared against `os.getenv("USERNAME")` / a bcrypt hash in `os.getenv("PASSWORD_HASH")`. Username comparison uses `secrets.compare_digest` rather than `==` to avoid a timing side-channel; password comparison is already constant-time via `bcrypt.checkpw`. Sessions are an in-memory `dict[session_id, username]`, matching ClipBackend's pattern — this also means a server restart naturally invalidates all sessions, which lines up with the "logged in until restart or 7 days" requirement without extra code. Cookie: `httponly=True, secure=True, samesite="lax", max_age=604800`.
+
+- **Soft delete stays behind a real `DELETE`.** `DELETE /api/items/{id}` sets `archived_at` rather than removing the row; the HTTP verb describes client-facing intent, not the storage mechanism. `GET /api/items` and `GET /api/items/{id}` filter `WHERE archived_at IS NULL`. Notes and maintenance records are NOT soft-deleted — the soft-delete rationale (avoid losing history) doesn't apply to records that were themselves the history being preserved; those get hard `DELETE`s.
+
+- **REST naming: plural collections, even for single-item operations.** `/api/items`, `/api/items/{id}`, `/api/items/{id}/notes` — consistent with GitHub/Stripe-style conventions, deliberately diverging from the singular `/api/clip/{clip_id}` pattern in the ClipBackend reference.
+
+- **PATCH, not PUT, for edits.** All edit calls send partial field sets (e.g. just `color`); PATCH is the semantically correct verb for a merge-style partial update, where PUT implies the client sends (and server replaces with) the full resource representation.
+
+- **First-note-as-blurb (Phase 1 stretch goal only).** If implemented, avoid an N+1 query. At this scale, a correlated subquery is simplest:
+
+  ```sql
+  SELECT i.*,
+    (SELECT body FROM notes
+     WHERE item_id = i.id
+     ORDER BY created_at ASC LIMIT 1) AS blurb
+  FROM items i
+  ```
+
+  A window-function equivalent (`ROW_NUMBER() OVER (PARTITION BY item_id ORDER BY created_at ASC)`, filtered to `rn = 1`) works too and generalizes better if this pattern shows up elsewhere later, but isn't necessary at this scale.
+
+- **No stored procedures.** SQLite doesn't support them in the Postgres/MySQL sense anyway, and nothing about this app's scale (single user, single process, low write volume) calls for pushing logic into the DB layer. Plain parameterized queries via small per-table helper functions, same pattern as ClipBackend's `get_user_by_username`.
+
+- **Tags are entirely out of scope for Phase 1.** No Phase 1 endpoint reads or writes `tags` / `item_tags`. The schema already supports them (join table, cascade deletes, unique constraint on tag name), so Phase 2 adds endpoints without any migration or reshaping of what ships here.
+
+## Open considerations
+
+- **Note/maintenance record edits.** `PATCH` endpoints for both are included above for completeness, but if Phase 1 scope needs trimming, these are the first candidates to defer — delete-and-recreate is a workable stopgap for fixing a bad entry.
+- **Blurb query.** Only build this if the Phase 1 stretch goal is actually pursued; otherwise the `GET /api/items` query above is sufficient as-is.
