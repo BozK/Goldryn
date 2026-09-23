@@ -1,7 +1,7 @@
 // Shared vocabulary for the FeedbackToast: what a toast looks like, what each
 // save failure says, and the `mutate` wrapper every POST/PATCH/DELETE goes through.
 
-import { ApiError } from './api/client'
+import { ApiError } from '../api/client'
 
 export type ToastTone = 'success' | 'error'
 

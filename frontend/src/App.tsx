@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
-import { api } from './api/client'
-import type { ToastMessage, ToastTone } from './lib/feedback'
+import { api, ApiError } from './api/client'
+import { isAuthFailure, SAVED_TEXT, saveErrorText } from './lib/feedback'
+import type { Mutate, ToastMessage, ToastTone } from './lib/feedback'
 import { FeedbackToast } from './components/FeedbackToast'
 import { ItemPanel } from './components/ItemPanel'
 import type { PanelEntry } from './components/ItemPanel'
@@ -42,17 +43,43 @@ function App() {
     setSelectedItemId(null)
   }, [])
 
-  const openPanel = useCallback((itemId: number | null) => {
-    setSelectedItemId(itemId)
-    setPanelEntry(itemId === null ? 'left' : 'right')
-    setPanelKey((key) => key + 1)
-    setViewMode('panel')
-  }, [])
+  const openPanel = useCallback(
+    (itemId: number | null) => {
+      // Re-clicking the card that's already open shouldn't slide the panel out and back in.
+      if (viewMode === 'panel' && itemId !== null && itemId === selectedItemId) return
+      setSelectedItemId(itemId)
+      setPanelEntry(itemId === null ? 'left' : 'right')
+      setPanelKey((key) => key + 1)
+      setViewMode('panel')
+    },
+    [viewMode, selectedItemId],
+  )
 
   const handleUnauthorized = useCallback(() => {
     closePanel()
     setAuth('anonymous')
   }, [closePanel])
+
+  // Every POST/PATCH/DELETE goes through here: toast the outcome, refresh the grid
+  // on success, and drop back to the login screen if the session has expired.
+  const mutate: Mutate = useCallback(
+    async <T,>(call: () => Promise<T>): Promise<T | undefined> => {
+      try {
+        const result = await call()
+        showToast('success', SAVED_TEXT)
+        setRefreshKey((key) => key + 1)
+        return result
+      } catch (err) {
+        const status = err instanceof ApiError ? err.status : 0
+        showToast('error', saveErrorText(status))
+        if (isAuthFailure(status)) handleUnauthorized()
+        return undefined
+      }
+    },
+    [showToast, handleUnauthorized],
+  )
+
+  const handleItemCreated = useCallback((id: number) => setSelectedItemId(id), [])
 
   const handleLogout = useCallback(async () => {
     try {
@@ -101,7 +128,10 @@ function App() {
                 key={panelKey}
                 itemId={selectedItemId}
                 enterFrom={panelEntry}
+                mutate={mutate}
+                onCreated={handleItemCreated}
                 onClose={closePanel}
+                onUnauthorized={handleUnauthorized}
               />
             )}
           </AnimatePresence>
