@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { api } from './api/client'
-import type { ToastMessage, ToastTone } from './feedback'
+import type { ToastMessage, ToastTone } from './lib/feedback'
 import { FeedbackToast } from './components/FeedbackToast'
 import { ItemPanel } from './components/ItemPanel'
 import type { PanelEntry } from './components/ItemPanel'

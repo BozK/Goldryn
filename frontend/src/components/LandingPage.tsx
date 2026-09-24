@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import type { ItemSummary } from '../GoldrynModels'
+import type { ItemSummary } from '../lib/GoldrynModels'
 import { api, ApiError } from '../api/client'
-import { isAuthFailure } from '../feedback'
+import { isAuthFailure } from '../lib/feedback'
 import { ItemCard } from './ItemCard'
 
 interface LandingPageProps {

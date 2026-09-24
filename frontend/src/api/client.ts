@@ -13,7 +13,7 @@ import type {
   Note,
   NoteCreate,
   NotePatch,
-} from '../GoldrynModels'
+} from '../lib/GoldrynModels'
 
 /**
  * Thrown for any failed request. `status` is the HTTP status, or 0 when the

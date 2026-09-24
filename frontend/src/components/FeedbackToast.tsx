@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import type { ToastMessage } from '../feedback'
+import type { ToastMessage } from '../lib/feedback'
 
 const VISIBLE_MS = 2200
 

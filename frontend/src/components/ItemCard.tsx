@@ -1,6 +1,6 @@
 import { motion } from 'motion/react'
-import type { ItemSummary } from '../GoldrynModels'
-import { formatDay, isPastDue } from '../dates'
+import type { ItemSummary } from '../lib/GoldrynModels'
+import { formatDay, isPastDue } from '../lib/dates'
 import { resolveColor } from '../palette'
 
 interface ItemCardProps {
