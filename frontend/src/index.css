@@ -1,0 +1,43 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Neutral dark surfaces; item colors come from src/palette.ts */
+  --color-surface: #101216;
+  --color-surface-raised: #191c22;
+  --color-surface-line: #2a2e36;
+  --color-gold: #d4a017;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-surface font-sans text-white antialiased;
+  }
+}
+
+/* Clipped top-left and bottom-right corners: the Phase 1 "parallelogram" card. */
+@utility clip-corners {
+  clip-path: polygon(
+    1.5rem 0,
+    100% 0,
+    100% calc(100% - 1.5rem),
+    calc(100% - 1.5rem) 100%,
+    0 100%,
+    0 1.5rem
+  );
+}
+
+@layer components {
+  .field-input {
+    @apply w-full rounded-lg border border-surface-line bg-surface-raised px-4 py-2 text-white placeholder-white/40 focus:border-gold focus:outline-none;
+  }
+
+  .btn-gold {
+    @apply rounded-lg bg-gold px-4 py-2 font-semibold text-surface transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+}
