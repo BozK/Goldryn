@@ -63,3 +63,170 @@ def init_db(db_path: Path) -> None:
             )
     finally:
         conn.close()
+
+
+# ============================================================================
+# Query helpers
+#
+# Writes commit immediately (`with conn:`). Column names in dynamic SET/INSERT
+# clauses come from the *_FIELDS whitelists below, never from the request.
+# Children of an archived item are treated as missing: every note/record query
+# joins through ACTIVE_ITEM_IDS.
+# ============================================================================
+
+ITEM_FIELDS = ("name", "color", "cadence_days", "next_maintenance_notes")
+NOTE_FIELDS = ("body",)
+RECORD_FIELDS = ("date", "summary", "cost", "contractor_info")
+
+ACTIVE_ITEM_IDS = "SELECT id FROM items WHERE archived_at IS NULL"
+
+
+def _columns(fields: dict, allowed: tuple[str, ...]) -> list[str]:
+    unknown = set(fields) - set(allowed)
+    if unknown:
+        raise ValueError(f"Unknown column(s): {sorted(unknown)}")
+    return list(fields)
+
+
+def _update(conn: sqlite3.Connection, table: str, allowed: tuple[str, ...], row_id: int, fields: dict) -> bool:
+    """UPDATE one active row. Returns False if it doesn't exist (or its item is archived)."""
+    columns = _columns(fields, allowed)
+    owner = "archived_at IS NULL" if table == "items" else f"item_id IN ({ACTIVE_ITEM_IDS})"
+    if not columns:
+        found = conn.execute(f"SELECT 1 FROM {table} WHERE id = ? AND {owner}", (row_id,)).fetchone()
+        return found is not None
+    assignments = ", ".join(f"{column} = ?" for column in columns)
+    with conn:
+        cursor = conn.execute(
+            f"UPDATE {table} SET {assignments} WHERE id = ? AND {owner}",
+            (*fields.values(), row_id),
+        )
+    return cursor.rowcount == 1
+
+
+def _insert_child(conn: sqlite3.Connection, table: str, allowed: tuple[str, ...], item_id: int, fields: dict) -> int | None:
+    """INSERT a note/record under an active item. Returns the new id, or None if the item is missing or archived."""
+    columns = _columns(fields, allowed)
+    placeholders = ", ".join("?" for _ in columns)
+    with conn:
+        # INSERT ... SELECT inserts nothing when the item isn't active: one statement, no race.
+        cursor = conn.execute(
+            f"INSERT INTO {table} (item_id, {', '.join(columns)}) "
+            f"SELECT id, {placeholders} FROM items WHERE id = ? AND archived_at IS NULL",
+            (*fields.values(), item_id),
+        )
+    return cursor.lastrowid if cursor.rowcount == 1 else None
+
+
+def _delete_child(conn: sqlite3.Connection, table: str, row_id: int) -> bool:
+    with conn:
+        cursor = conn.execute(
+            f"DELETE FROM {table} WHERE id = ? AND item_id IN ({ACTIVE_ITEM_IDS})",
+            (row_id,),
+        )
+    return cursor.rowcount == 1
+
+
+# -------- Items --------
+
+_ITEM_SELECT = """
+    SELECT i.id, i.name, i.color, i.cadence_days, i.next_maintenance_notes, i.created_at,
+           MAX(m.date) AS last_maintenance_date
+    FROM items i
+    LEFT JOIN maintenance_records m ON m.item_id = i.id
+    WHERE i.archived_at IS NULL
+"""
+
+
+def list_items(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Active items, oldest first. LEFT JOIN keeps items that have no records yet."""
+    return conn.execute(_ITEM_SELECT + " GROUP BY i.id ORDER BY i.created_at, i.id").fetchall()
+
+
+def get_item(conn: sqlite3.Connection, item_id: int) -> sqlite3.Row | None:
+    return conn.execute(_ITEM_SELECT + " AND i.id = ? GROUP BY i.id", (item_id,)).fetchone()
+
+
+def insert_item(conn: sqlite3.Connection, fields: dict) -> int:
+    columns = _columns(fields, ITEM_FIELDS)
+    placeholders = ", ".join("?" for _ in columns)
+    with conn:
+        cursor = conn.execute(
+            f"INSERT INTO items ({', '.join(columns)}) VALUES ({placeholders})",
+            tuple(fields.values()),
+        )
+    return cursor.lastrowid
+
+
+def update_item(conn: sqlite3.Connection, item_id: int, fields: dict) -> bool:
+    return _update(conn, "items", ITEM_FIELDS, item_id, fields)
+
+
+def archive_item(conn: sqlite3.Connection, item_id: int) -> bool:
+    """Soft delete. Notes and records stay in the DB but become unreachable."""
+    with conn:
+        cursor = conn.execute(
+            f"UPDATE items SET archived_at = {NOW_SQL} WHERE id = ? AND archived_at IS NULL",
+            (item_id,),
+        )
+    return cursor.rowcount == 1
+
+
+# -------- Notes --------
+
+
+def list_notes(conn: sqlite3.Connection, item_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, body, created_at FROM notes WHERE item_id = ? ORDER BY created_at DESC, id DESC",
+        (item_id,),
+    ).fetchall()
+
+
+def get_note(conn: sqlite3.Connection, note_id: int) -> sqlite3.Row | None:
+    return conn.execute(
+        f"SELECT id, body, created_at FROM notes WHERE id = ? AND item_id IN ({ACTIVE_ITEM_IDS})",
+        (note_id,),
+    ).fetchone()
+
+
+def insert_note(conn: sqlite3.Connection, item_id: int, fields: dict) -> int | None:
+    return _insert_child(conn, "notes", NOTE_FIELDS, item_id, fields)
+
+
+def update_note(conn: sqlite3.Connection, note_id: int, fields: dict) -> bool:
+    return _update(conn, "notes", NOTE_FIELDS, note_id, fields)
+
+
+def delete_note(conn: sqlite3.Connection, note_id: int) -> bool:
+    return _delete_child(conn, "notes", note_id)
+
+
+# -------- Maintenance records --------
+
+_RECORD_COLUMNS = "id, date, summary, cost, contractor_info"
+
+
+def list_records(conn: sqlite3.Connection, item_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        f"SELECT {_RECORD_COLUMNS} FROM maintenance_records WHERE item_id = ? ORDER BY date DESC, id DESC",
+        (item_id,),
+    ).fetchall()
+
+
+def get_record(conn: sqlite3.Connection, record_id: int) -> sqlite3.Row | None:
+    return conn.execute(
+        f"SELECT {_RECORD_COLUMNS} FROM maintenance_records WHERE id = ? AND item_id IN ({ACTIVE_ITEM_IDS})",
+        (record_id,),
+    ).fetchone()
+
+
+def insert_record(conn: sqlite3.Connection, item_id: int, fields: dict) -> int | None:
+    return _insert_child(conn, "maintenance_records", RECORD_FIELDS, item_id, fields)
+
+
+def update_record(conn: sqlite3.Connection, record_id: int, fields: dict) -> bool:
+    return _update(conn, "maintenance_records", RECORD_FIELDS, record_id, fields)
+
+
+def delete_record(conn: sqlite3.Connection, record_id: int) -> bool:
+    return _delete_child(conn, "maintenance_records", record_id)
