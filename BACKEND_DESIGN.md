@@ -49,9 +49,9 @@ DELETE /api/maintenance_records/{id}
 {
   "id": 1,
   "name": "Water filter",
-  "color": "blue",
+  "color": "Blue",            // palette name; the frontend owns what it looks like
   "cadence_days": 90,
-  "next_due": "2026-11-15"   // null if no cadence or no maintenance history yet
+  "next_due": "2026-11-13"   // null if no cadence or no maintenance history yet
 }
 ```
 
@@ -61,16 +61,43 @@ DELETE /api/maintenance_records/{id}
 {
   "id": 1,
   "name": "Water filter",
-  "color": "blue",
+  "color": "Blue",
   "cadence_days": 90,
   "next_maintenance_notes": "Need a 3rd-party filter, not OEM",
   "created_at": "2026-01-04T12:00:00Z",
+  "next_due": "2026-11-13",
   "notes": [ { "id": 1, "body": "...", "created_at": "..." } ],
   "maintenance_records": [
     { "id": 1, "date": "2026-08-15", "summary": "...", "cost": 45.00, "contractor_info": "..." }
   ]
 }
 ```
+
+Notes are ordered newest first (`created_at DESC, id DESC`), maintenance records by `date DESC, id DESC`.
+
+**Writes return the resource.** `POST`/`PATCH /api/items[/{id}]` return the item header (every field above except `notes` and `maintenance_records`, `next_due` included). Note and maintenance record `POST`/`PATCH` return that note or record. The frontend's save-on-blur replaces its local copy with whatever comes back, so this is required, not a convenience. `DELETE`s return `{"message": "..."}`.
+
+## Status codes and validation
+
+| Code | When |
+|------|------|
+| 200 / 201 | Success; every `POST` that creates something returns 201 |
+| 400 | Bad login credentials |
+| 401 | No session, unknown session, or expired session (checked before the body is validated) |
+| 404 | Missing **or archived** item; missing note/record, or one whose item is archived (including creating one under an archived item) |
+| 422 | Body failed validation (FastAPI's default `{"detail": [...]}`); the frontend shows the same "Invalid data" toast as for 400 |
+
+Validation rules:
+
+- Unknown fields are rejected (422), so a typo'd field name doesn't silently do nothing.
+- **PATCH is a merge.** An omitted field is left alone; an explicit `null` clears a nullable column. `name`, `body` and `date` are `NOT NULL`, so `null` for them is a 422. An empty PATCH body returns the resource unchanged.
+- `name`: 1–200 characters after trimming whitespace.
+- `color`: any string up to 32 characters. The frontend owns the palette and falls back to a neutral color for unknown names, so the backend doesn't keep a second copy of the list.
+- `cadence_days`: integer from 1 to 36500 (100 years) or null.
+- `body`: must contain a non-whitespace character.
+- `date`: `YYYY-MM-DD` and a real calendar date. No timestamps or other formats.
+- `cost`: number ≥ 0 or null.
+- Path ids must be positive integers in SQLite's 64-bit range (422 otherwise).
 
 ## Design notes
 
@@ -113,6 +140,8 @@ DELETE /api/maintenance_records/{id}
   A window-function equivalent (`ROW_NUMBER() OVER (PARTITION BY item_id ORDER BY created_at ASC)`, filtered to `rn = 1`) works too and generalizes better if this pattern shows up elsewhere later, but isn't necessary at this scale.
 
 - **No stored procedures.** SQLite doesn't support them in the Postgres/MySQL sense anyway, and nothing about this app's scale (single user, single process, low write volume) calls for pushing logic into the DB layer. Plain parameterized queries via small per-table helper functions, same pattern as ClipBackend's `get_user_by_username`.
+
+- **Single process, single worker.** Sessions live in memory (see auth above). Run it as `python backend/GoldrynBackend.py`, which serves the API and the built `frontend/dist` on 127.0.0.1:8000, or use `./run.sh` to build the frontend first. `GET /health` is an unauthenticated liveness check.
 
 - **Tags are entirely out of scope for Phase 1.** No Phase 1 endpoint reads or writes `tags` / `item_tags`. The schema already supports them (join table, cascade deletes, unique constraint on tag name), so Phase 2 adds endpoints without any migration or reshaping of what ships here.
 

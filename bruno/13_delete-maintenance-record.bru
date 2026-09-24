@@ -1,0 +1,11 @@
+meta {
+  name: Delete Maintenance Record
+  type: http
+  seq: 13
+}
+
+delete {
+  url: {{base_url}}/api/maintenance_records/{{recordId}}
+  body: none
+  auth: none
+}
