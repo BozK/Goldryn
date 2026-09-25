@@ -100,8 +100,7 @@ function App() {
 
   // The grid makes room on the side the panel isn't on: a new item's panel fills the
   // left half, an existing item's panel the right three fifths.
-  const gridLayout =
-    viewMode === 'list' ? 'w-full' : panelEntry === 'left' ? 'ml-auto w-1/2' : 'w-2/5'
+  const gridLayout = viewMode === 'list' ? 'w-full' : panelEntry === 'left' ? 'ml-auto w-1/2' : 'w-2/5'
 
   return (
     <>
