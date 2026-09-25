@@ -22,7 +22,7 @@
 
 /* Clipped top-left and bottom-right corners: the Phase 1 "parallelogram" card. */
 @utility clip-corners {
-  clip-path: polygon(1.5rem 0, 100% 0, 100% calc(100% - 1.5rem), calc(100% - 1.5rem) 100%, 0 100%, 0 1.5rem);
+  clip-path: polygon(2rem 0, 100% 0, 100% calc(100% - 2rem), calc(100% - 2rem) 100%, 0 100%, 0 2rem);
 }
 
 @layer components {
