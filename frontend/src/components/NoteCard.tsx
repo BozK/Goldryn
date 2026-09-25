@@ -34,7 +34,7 @@ export function NoteCard({ itemId, initial, accent, mutate, onRemove }: NoteCard
   }
 
   return (
-    <div className="group relative rounded-lg p-3 pr-8 shadow" style={{ backgroundColor: accent }}>
+    <div className="group relative clip-corners clip-cut-4 p-3 pr-8" style={{ backgroundColor: accent }}>
       <EditableField
         value={saved?.body ?? ''}
         onCommit={(body) => void note.save({ body })}

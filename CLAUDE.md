@@ -90,7 +90,7 @@ The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PAS
 - **Toasts.** Every POST/PATCH/DELETE goes through App's `mutate`. It shows the toast, refetches the grid on success, and bounces to login on 401. GETs don't toast.
 - **Saving.** Fields save on blur, and only when the value changed (`EditableField`). Escape blurs first so an in-progress edit is saved, then closes the panel.
 - **Cards and panel.**
-  - Cards use the `clip-corners` utility defined in `index.css`.
+  - Item cards, notes and records use the `clip-corners` utility in `index.css` (a `shape()` clip-path). Tune it per element with `clip-cut-*` and `clip-round-*`, e.g. notes and records use `clip-cut-4`.
   - A new item's panel docks on the left half. An existing item's panel docks on the right 3/5.
   - The grid shifts to the other side.
 - **Colors.** The backend stores a palette name such as `"Green"`, and `palette.ts` owns the actual colors.
