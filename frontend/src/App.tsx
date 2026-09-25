@@ -98,6 +98,11 @@ function App() {
 
   const handleLoginError = useCallback((text: string) => showToast('error', text), [showToast])
 
+  // The grid makes room on the side the panel isn't on: a new item's panel fills the
+  // left half, an existing item's panel the right three fifths.
+  const gridLayout =
+    viewMode === 'list' ? 'w-full' : panelEntry === 'left' ? 'ml-auto w-1/2' : 'w-2/5'
+
   return (
     <>
       <FeedbackToast toast={toast} onDismiss={dismissToast} />
@@ -110,7 +115,7 @@ function App() {
 
       {auth === 'authenticated' && (
         <div className="relative flex h-screen overflow-hidden">
-          <section className={`h-full overflow-y-auto ${viewMode === 'panel' ? 'w-2/5' : 'w-full'}`}>
+          <section className={`h-full overflow-y-auto ${gridLayout}`}>
             <LandingPage
               refreshKey={refreshKey}
               isPanelOpen={viewMode === 'panel'}

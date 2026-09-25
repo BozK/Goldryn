@@ -32,6 +32,8 @@ type LoadState = { status: 'loading' } | { status: 'ready'; detail: ItemDetail |
 export function ItemPanel({ itemId, enterFrom, mutate, onCreated, onClose, onUnauthorized }: ItemPanelProps) {
   const panelRef = useRef<HTMLElement>(null)
   const offscreen = enterFrom === 'left' ? '-100%' : '100%'
+  // Docked on the side it slides in from; App shifts the grid to the other side.
+  const placement = enterFrom === 'left' ? 'left-0 w-1/2 border-r' : 'right-0 w-3/5 border-l'
 
   // Loaded once per opening: the panel stays mounted when a new item gets its id,
   // so that change must not trigger a reload over what the user is typing.
@@ -90,7 +92,7 @@ export function ItemPanel({ itemId, enterFrom, mutate, onCreated, onClose, onUna
       animate={{ x: 0 }}
       exit={{ x: offscreen }}
       transition={{ type: 'spring', stiffness: 320, damping: 36 }}
-      className="absolute inset-y-0 right-0 z-10 w-3/5 overflow-y-auto border-l border-surface-line bg-surface-raised shadow-2xl"
+      className={`absolute inset-y-0 z-10 overflow-y-auto border-surface-line bg-surface-raised shadow-2xl ${placement}`}
     >
       <button
         type="button"
