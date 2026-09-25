@@ -225,7 +225,7 @@ function ItemPanelContent({ initial, mutate, onCreated, onArchived }: ItemPanelC
               value={item?.cadence_days?.toString() ?? ''}
               onCommit={saveCadence}
               label="Cadence in days"
-              placeholder="No recurring schedule"
+              placeholder="Cadence in days (optional)"
               inputMode="numeric"
               display={(days) => `Every ${days} day${days === '1' ? '' : 's'}`}
             />
