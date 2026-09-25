@@ -66,7 +66,7 @@ export function LandingPage({
         </p>
       )}
 
-      <div className="flex items-start gap-4">
+      <div className="flex items-start justify-center gap-4">
         <motion.button
           layout
           type="button"
