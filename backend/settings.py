@@ -4,6 +4,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = REPO_ROOT / "data" / "goldryn.db"
+DEFAULT_LOG_DIR = REPO_ROOT / "logs"
 
 _FALSY = {"0", "false", "no", "off"}
 
@@ -16,6 +17,9 @@ class Settings:
     password_hash: bytes
     db_path: Path
     cookie_secure: bool
+    # No default on purpose: anything building Settings by hand (the tests) must
+    # choose where logs go, so it can't write into the repo's logs/ by accident.
+    log_dir: Path
 
 
 def load_settings() -> Settings:
@@ -40,10 +44,12 @@ def load_settings() -> Settings:
 
     db_path = os.getenv("GOLDRYN_DB_PATH")
     cookie_secure = os.getenv("GOLDRYN_COOKIE_SECURE", "true").strip().lower() not in _FALSY
+    log_dir = os.getenv("GOLDRYN_LOG_DIR")
 
     return Settings(
         username=username,
         password_hash=password_hash.encode(),
         db_path=Path(db_path) if db_path else DEFAULT_DB_PATH,
         cookie_secure=cookie_secure,
+        log_dir=Path(log_dir) if log_dir else DEFAULT_LOG_DIR,
     )

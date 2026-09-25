@@ -145,6 +145,29 @@ Validation rules:
 
 - **Tags are entirely out of scope for Phase 1.** No Phase 1 endpoint reads or writes `tags` / `item_tags`. The schema already supports them (join table, cascade deletes, unique constraint on tag name), so Phase 2 adds endpoints without any migration or reshaping of what ships here.
 
+## Logging
+
+Every `/api/*` request and every DB query a route makes gets one line, in `backend/logger.py`. Fields are separated by ` | `, and an empty field is `-`:
+
+```
+<local time> | API | <status>          | <method> <path> | <request JSON> | <response JSON>          | <ms> | IP: <addr>
+<local time> | DB | OK or ERROR <exc> | <table>: <SQL>  | <params>       | <rows, or rowcount/id>   | <ms> | IP: <addr>
+```
+
+(Padded here for reading; real lines use a single ` | `.)
+
+```
+2026-09-25 15:59:25 | API | 200 | POST /api/auth/login | {"username": "smoke", "password": "***"} | {"username": "smoke"} | 2.4ms
+2026-09-25 15:59:25 | DB | OK | items: UPDATE items SET next_maintenance_notes = ? WHERE id = ? AND archived_at IS NULL | ["Need a 3rd-party filter, not OEM", 1] | rowcount=1 | 4.9ms
+```
+
+- **Where.** `logs/Goldryn-YYYY-MM-DD.log` (override the folder with `GOLDRYN_LOG_DIR`), also echoed to stderr. A new file starts at local midnight. Nothing is renamed or deleted: the files are the history. `DailyFileHandler` checks the date on each write and opens the new day's file itself, because `TimedRotatingFileHandler`'s rename at rollover is fragile on Windows.
+- **What's not logged.** `/health`, the static frontend, `init_db()`/migrations and the `PRAGMA foreign_keys` in `db.connect()`. uvicorn's own access log is off, so requests aren't logged twice.
+- **Redaction.** Any `password` key in a logged body becomes `"***"`, at any depth, including where FastAPI's 422 detail echoes it back. Cookies, headers and the session id are never logged. A body that isn't JSON is logged only as `<N bytes, not JSON>`.
+- **Truncation.** Request, response, SQL params and DB rows are each cut to 200 characters, with `…(+N chars)`.
+- **IP.** Taken only from Cloudflare's `CF-Connecting-IP`. Without it the field is left off; the socket address is always Cloudflare or the tunnel, so it's never used. DB lines carry the IP of the request that ran them.
+- **DB lines** come from `db._select` / `db._write`, the only two places the query helpers execute SQL. The table is the first `FROM`/`INTO`/`UPDATE` target, so a JOIN or subselect is logged under its primary table. A query that raises is logged as `ERROR <ExceptionClass>: <message>` and the exception still propagates.
+
 ## Open considerations
 
 - **Note/maintenance record edits.** `PATCH` endpoints for both are included above for completeness, but if Phase 1 scope needs trimming, these are the first candidates to defer — delete-and-recreate is a workable stopgap for fixing a bad entry.
