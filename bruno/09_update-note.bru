@@ -1,0 +1,21 @@
+meta {
+  name: Update Note
+  type: http
+  seq: 9
+}
+
+patch {
+  url: {{base_url}}/api/notes/{{noteId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "body": "Spare filters are under the kitchen sink"
+  }
+}

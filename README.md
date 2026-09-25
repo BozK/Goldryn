@@ -24,6 +24,16 @@ To run it with uvicorn directly (e.g. with `--reload`), it's an app factory:
 .venv/Scripts/uvicorn GoldrynBackend:create_app --factory --app-dir backend --env-file .env
 ```
 
+## Running it all
+
+```sh
+./run.sh   # builds frontend/dist, then serves it and the API on http://127.0.0.1:8000
+```
+
+## Manual API testing (Bruno)
+
+`bruno/` is a [Bruno](https://www.usebruno.com/) collection covering every endpoint on its happy path, in order (login, CRUD, archive, logout). IDs from each create are passed to the requests after it, and Bruno's cookie jar carries the session. Pick the `local` environment and set the `username` and `password` secrets, which Bruno keeps locally and never writes to the collection files. It needs `GOLDRYN_COOKIE_SECURE=false`, since the local server is plain http. Error cases are covered by pytest, not Bruno.
+
 ## Frontend development
 
 Requires Node 20.19+ or 22.12+.

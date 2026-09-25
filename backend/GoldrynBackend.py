@@ -1,16 +1,36 @@
+import sqlite3
+from datetime import date, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, FastAPI, HTTPException, Path, Request, Response, status
 from fastapi.staticfiles import StaticFiles
 
+import db
 from auth import SESSION_COOKIE, SESSION_TTL, SessionStore, check_credentials, get_current_user
-from db import init_db
-from GoldrynModels import LoginRequest, Me, MessageResponse
+from GoldrynModels import (
+    Item,
+    ItemCreate,
+    ItemDetail,
+    ItemPatch,
+    ItemSummary,
+    LoginRequest,
+    MaintenanceRecord,
+    MaintenanceRecordCreate,
+    MaintenanceRecordPatch,
+    Me,
+    MessageResponse,
+    Note,
+    NoteCreate,
+    NotePatch,
+)
 from settings import REPO_ROOT, Settings, load_settings
 
 FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
 
 CurrentUser = Annotated[str, Depends(get_current_user)]
+Conn = Annotated[sqlite3.Connection, Depends(db.get_db)]
+# Path ids are bounded to SQLite's integer range; anything larger can't exist and would overflow the driver.
+Id = Annotated[int, Path(ge=1, le=2**63 - 1)]
 
 # ============================================================================
 # Auth routes
@@ -61,6 +81,154 @@ def me(username: CurrentUser):
 
 
 # ============================================================================
+# Helpers
+# ============================================================================
+
+
+def next_due(last_maintenance_date: str | None, cadence_days: int | None) -> date | None:
+    """Last maintenance + cadence. The one place this is computed; the frontend never re-derives it."""
+    if last_maintenance_date is None or cadence_days is None:
+        return None
+    try:
+        return date.fromisoformat(last_maintenance_date) + timedelta(days=cadence_days)
+    except OverflowError:  # past 9999-12-31
+        return None
+
+
+def not_found(what: str) -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, detail=f"{what} not found")
+
+
+def load_item(conn: sqlite3.Connection, item_id: int) -> Item:
+    row = db.get_item(conn, item_id)
+    if row is None:
+        raise not_found("Item")
+    return Item(**dict(row), next_due=next_due(row["last_maintenance_date"], row["cadence_days"]))
+
+
+def load_note(conn: sqlite3.Connection, note_id: int) -> Note:
+    row = db.get_note(conn, note_id)
+    if row is None:
+        raise not_found("Note")
+    return Note(**row)
+
+
+def load_record(conn: sqlite3.Connection, record_id: int) -> MaintenanceRecord:
+    row = db.get_record(conn, record_id)
+    if row is None:
+        raise not_found("Maintenance record")
+    return MaintenanceRecord(**row)
+
+
+# ============================================================================
+# Item routes
+#
+# Every route below requires a session. PATCH bodies use exclude_unset, so an
+# omitted field is left alone and an explicit null clears the column.
+# mode="json" turns dates into "YYYY-MM-DD" strings for SQLite.
+# ============================================================================
+
+api_router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
+
+
+@api_router.get("/items", response_model=list[ItemSummary])
+def list_items(conn: Conn):
+    return [
+        ItemSummary(**dict(row), next_due=next_due(row["last_maintenance_date"], row["cadence_days"]))
+        for row in db.list_items(conn)
+    ]
+
+
+@api_router.get("/items/{item_id}", response_model=ItemDetail)
+def get_item(item_id: Id, conn: Conn):
+    item = load_item(conn, item_id)
+    return ItemDetail(
+        **item.model_dump(),
+        notes=[Note(**row) for row in db.list_notes(conn, item_id)],
+        maintenance_records=[MaintenanceRecord(**row) for row in db.list_records(conn, item_id)],
+    )
+
+
+@api_router.post("/items", response_model=Item, status_code=status.HTTP_201_CREATED)
+def create_item(body: ItemCreate, conn: Conn):
+    item_id = db.insert_item(conn, body.model_dump(mode="json"))
+    return load_item(conn, item_id)
+
+
+@api_router.patch("/items/{item_id}", response_model=Item)
+def update_item(item_id: Id, body: ItemPatch, conn: Conn):
+    if not db.update_item(conn, item_id, body.model_dump(mode="json", exclude_unset=True)):
+        raise not_found("Item")
+    return load_item(conn, item_id)
+
+
+@api_router.delete("/items/{item_id}", response_model=MessageResponse)
+def archive_item(item_id: Id, conn: Conn):
+    """Soft delete: sets archived_at. Notes and records are kept but hidden with the item."""
+    if not db.archive_item(conn, item_id):
+        raise not_found("Item")
+    return MessageResponse(message="Item archived")
+
+
+# ============================================================================
+# Note routes
+# ============================================================================
+
+
+@api_router.post("/items/{item_id}/notes", response_model=Note, status_code=status.HTTP_201_CREATED)
+def create_note(item_id: Id, body: NoteCreate, conn: Conn):
+    note_id = db.insert_note(conn, item_id, body.model_dump(mode="json"))
+    if note_id is None:
+        raise not_found("Item")
+    return load_note(conn, note_id)
+
+
+@api_router.patch("/notes/{note_id}", response_model=Note)
+def update_note(note_id: Id, body: NotePatch, conn: Conn):
+    if not db.update_note(conn, note_id, body.model_dump(mode="json", exclude_unset=True)):
+        raise not_found("Note")
+    return load_note(conn, note_id)
+
+
+@api_router.delete("/notes/{note_id}", response_model=MessageResponse)
+def delete_note(note_id: Id, conn: Conn):
+    if not db.delete_note(conn, note_id):
+        raise not_found("Note")
+    return MessageResponse(message="Note deleted")
+
+
+# ============================================================================
+# Maintenance record routes
+# ============================================================================
+
+
+@api_router.post(
+    "/items/{item_id}/maintenance_records",
+    response_model=MaintenanceRecord,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_record(item_id: Id, body: MaintenanceRecordCreate, conn: Conn):
+    record_id = db.insert_record(conn, item_id, body.model_dump(mode="json"))
+    if record_id is None:
+        raise not_found("Item")
+    return load_record(conn, record_id)
+
+
+@api_router.patch("/maintenance_records/{record_id}", response_model=MaintenanceRecord)
+def update_record(record_id: Id, body: MaintenanceRecordPatch, conn: Conn):
+    if not db.update_record(conn, record_id, body.model_dump(mode="json", exclude_unset=True)):
+        raise not_found("Maintenance record")
+    return load_record(conn, record_id)
+
+
+@api_router.delete("/maintenance_records/{record_id}", response_model=MessageResponse)
+def delete_record(record_id: Id, conn: Conn):
+    if not db.delete_record(conn, record_id):
+        raise not_found("Maintenance record")
+    return MessageResponse(message="Maintenance record deleted")
+
+
+# ============================================================================
 # App factory
 # ============================================================================
 
@@ -71,13 +239,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     and `uvicorn --factory` get exactly the same app as `python GoldrynBackend.py`.
     """
     settings = settings or load_settings()
-    init_db(settings.db_path)
+    db.init_db(settings.db_path)
 
     app = FastAPI(title="Goldryn API", version="1.0.0")
     app.state.settings = settings
     app.state.sessions = SessionStore()
 
     app.include_router(auth_router)
+    app.include_router(api_router)
 
     @app.get("/health")
     def health():
