@@ -19,6 +19,7 @@ def settings(tmp_path) -> Settings:
         db_path=tmp_path / "goldryn.db",
         # TestClient talks plain http, and httpx won't send a Secure cookie over it.
         cookie_secure=False,
+        log_dir=tmp_path / "logs",
     )
 
 

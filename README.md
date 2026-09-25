@@ -18,10 +18,12 @@ cp .env.example .env
 
 On Linux/macOS, use `.venv/bin/` instead of `.venv/Scripts/`. The SQLite file is created at `data/goldryn.db` on first start (override with `GOLDRYN_DB_PATH`). Sessions live in memory, so run a single worker, and restarting the server logs you out.
 
-To run it with uvicorn directly (e.g. with `--reload`), it's an app factory:
+Every API request and DB query is logged to `logs/Goldryn-YYYY-MM-DD.log` (a new file each local day, override the folder with `GOLDRYN_LOG_DIR`) and echoed to the terminal. See "Logging" in `BACKEND_DESIGN.md`.
+
+To run it with uvicorn directly (e.g. with `--reload`), it's an app factory. `--no-access-log` stops uvicorn logging each request a second time:
 
 ```sh
-.venv/Scripts/uvicorn GoldrynBackend:create_app --factory --app-dir backend --env-file .env
+.venv/Scripts/uvicorn GoldrynBackend:create_app --factory --app-dir backend --env-file .env --no-access-log
 ```
 
 ## Running it all

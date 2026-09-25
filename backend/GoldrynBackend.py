@@ -23,6 +23,7 @@ from GoldrynModels import (
     NoteCreate,
     NotePatch,
 )
+from logger import RequestLogMiddleware, configure_logging
 from settings import REPO_ROOT, Settings, load_settings
 
 FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
@@ -239,11 +240,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     and `uvicorn --factory` get exactly the same app as `python GoldrynBackend.py`.
     """
     settings = settings or load_settings()
+    configure_logging(settings.log_dir)
     db.init_db(settings.db_path)
 
     app = FastAPI(title="Goldryn API", version="1.0.0")
     app.state.settings = settings
     app.state.sessions = SessionStore()
+    # One line per /api request; DB lines come from db._select/_write.
+    app.add_middleware(RequestLogMiddleware)
 
     app.include_router(auth_router)
     app.include_router(api_router)
@@ -265,4 +269,5 @@ if __name__ == "__main__":
 
     load_dotenv(REPO_ROOT / ".env")
     # One worker only: sessions live in this process's memory.
-    uvicorn.run(create_app(), host="127.0.0.1", port=8000)
+    # No access log: RequestLogMiddleware already logs every /api request.
+    uvicorn.run(create_app(), host="127.0.0.1", port=8000, access_log=False)

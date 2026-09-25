@@ -1,8 +1,11 @@
 import sqlite3
-from collections.abc import Iterator
+import time
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 from fastapi import Request
+
+import logger
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
@@ -66,9 +69,48 @@ def init_db(db_path: Path) -> None:
 
 
 # ============================================================================
+# Logged execution
+#
+# Every query the helpers below make goes through _select or _write, which
+# time it and write one DB log line (logger.py). connect() and init_db() call
+# conn.execute directly, so the foreign_keys PRAGMA and migrations aren't logged.
+# ============================================================================
+
+
+def _select(conn: sqlite3.Connection, sql: str, params: Sequence = ()) -> list[sqlite3.Row]:
+    """Run a SELECT and fetch every row. Rows are fetched here so they can be logged."""
+    start = time.perf_counter()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    except Exception as exc:
+        logger.log_db_error(sql, params, exc, (time.perf_counter() - start) * 1000)
+        raise
+    logger.log_select(sql, params, rows, (time.perf_counter() - start) * 1000)
+    return rows
+
+
+def _select_one(conn: sqlite3.Connection, sql: str, params: Sequence = ()) -> sqlite3.Row | None:
+    rows = _select(conn, sql, params)
+    return rows[0] if rows else None
+
+
+def _write(conn: sqlite3.Connection, sql: str, params: Sequence = ()) -> sqlite3.Cursor:
+    """Run one INSERT/UPDATE/DELETE and commit it (`with conn:` rolls back if it raises)."""
+    start = time.perf_counter()
+    try:
+        with conn:
+            cursor = conn.execute(sql, params)
+    except Exception as exc:
+        logger.log_db_error(sql, params, exc, (time.perf_counter() - start) * 1000)
+        raise
+    logger.log_write(sql, params, cursor, (time.perf_counter() - start) * 1000)
+    return cursor
+
+
+# ============================================================================
 # Query helpers
 #
-# Writes commit immediately (`with conn:`). Column names in dynamic SET/INSERT
+# Writes commit immediately (via _write). Column names in dynamic SET/INSERT
 # clauses come from the *_FIELDS whitelists below, never from the request.
 # Children of an archived item are treated as missing: every note/record query
 # joins through ACTIVE_ITEM_IDS.
@@ -93,14 +135,13 @@ def _update(conn: sqlite3.Connection, table: str, allowed: tuple[str, ...], row_
     columns = _columns(fields, allowed)
     owner = "archived_at IS NULL" if table == "items" else f"item_id IN ({ACTIVE_ITEM_IDS})"
     if not columns:
-        found = conn.execute(f"SELECT 1 FROM {table} WHERE id = ? AND {owner}", (row_id,)).fetchone()
-        return found is not None
+        return _select_one(conn, f"SELECT 1 FROM {table} WHERE id = ? AND {owner}", (row_id,)) is not None
     assignments = ", ".join(f"{column} = ?" for column in columns)
-    with conn:
-        cursor = conn.execute(
-            f"UPDATE {table} SET {assignments} WHERE id = ? AND {owner}",
-            (*fields.values(), row_id),
-        )
+    cursor = _write(
+        conn,
+        f"UPDATE {table} SET {assignments} WHERE id = ? AND {owner}",
+        (*fields.values(), row_id),
+    )
     return cursor.rowcount == 1
 
 
@@ -108,22 +149,22 @@ def _insert_child(conn: sqlite3.Connection, table: str, allowed: tuple[str, ...]
     """INSERT a note/record under an active item. Returns the new id, or None if the item is missing or archived."""
     columns = _columns(fields, allowed)
     placeholders = ", ".join("?" for _ in columns)
-    with conn:
-        # INSERT ... SELECT inserts nothing when the item isn't active: one statement, no race.
-        cursor = conn.execute(
-            f"INSERT INTO {table} (item_id, {', '.join(columns)}) "
-            f"SELECT id, {placeholders} FROM items WHERE id = ? AND archived_at IS NULL",
-            (*fields.values(), item_id),
-        )
+    # INSERT ... SELECT inserts nothing when the item isn't active: one statement, no race.
+    cursor = _write(
+        conn,
+        f"INSERT INTO {table} (item_id, {', '.join(columns)}) "
+        f"SELECT id, {placeholders} FROM items WHERE id = ? AND archived_at IS NULL",
+        (*fields.values(), item_id),
+    )
     return cursor.lastrowid if cursor.rowcount == 1 else None
 
 
 def _delete_child(conn: sqlite3.Connection, table: str, row_id: int) -> bool:
-    with conn:
-        cursor = conn.execute(
-            f"DELETE FROM {table} WHERE id = ? AND item_id IN ({ACTIVE_ITEM_IDS})",
-            (row_id,),
-        )
+    cursor = _write(
+        conn,
+        f"DELETE FROM {table} WHERE id = ? AND item_id IN ({ACTIVE_ITEM_IDS})",
+        (row_id,),
+    )
     return cursor.rowcount == 1
 
 
@@ -140,21 +181,21 @@ _ITEM_SELECT = """
 
 def list_items(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Active items, oldest first. LEFT JOIN keeps items that have no records yet."""
-    return conn.execute(_ITEM_SELECT + " GROUP BY i.id ORDER BY i.created_at, i.id").fetchall()
+    return _select(conn, _ITEM_SELECT + " GROUP BY i.id ORDER BY i.created_at, i.id")
 
 
 def get_item(conn: sqlite3.Connection, item_id: int) -> sqlite3.Row | None:
-    return conn.execute(_ITEM_SELECT + " AND i.id = ? GROUP BY i.id", (item_id,)).fetchone()
+    return _select_one(conn, _ITEM_SELECT + " AND i.id = ? GROUP BY i.id", (item_id,))
 
 
 def insert_item(conn: sqlite3.Connection, fields: dict) -> int:
     columns = _columns(fields, ITEM_FIELDS)
     placeholders = ", ".join("?" for _ in columns)
-    with conn:
-        cursor = conn.execute(
-            f"INSERT INTO items ({', '.join(columns)}) VALUES ({placeholders})",
-            tuple(fields.values()),
-        )
+    cursor = _write(
+        conn,
+        f"INSERT INTO items ({', '.join(columns)}) VALUES ({placeholders})",
+        tuple(fields.values()),
+    )
     return cursor.lastrowid
 
 
@@ -164,11 +205,11 @@ def update_item(conn: sqlite3.Connection, item_id: int, fields: dict) -> bool:
 
 def archive_item(conn: sqlite3.Connection, item_id: int) -> bool:
     """Soft delete. Notes and records stay in the DB but become unreachable."""
-    with conn:
-        cursor = conn.execute(
-            f"UPDATE items SET archived_at = {NOW_SQL} WHERE id = ? AND archived_at IS NULL",
-            (item_id,),
-        )
+    cursor = _write(
+        conn,
+        f"UPDATE items SET archived_at = {NOW_SQL} WHERE id = ? AND archived_at IS NULL",
+        (item_id,),
+    )
     return cursor.rowcount == 1
 
 
@@ -176,17 +217,19 @@ def archive_item(conn: sqlite3.Connection, item_id: int) -> bool:
 
 
 def list_notes(conn: sqlite3.Connection, item_id: int) -> list[sqlite3.Row]:
-    return conn.execute(
+    return _select(
+        conn,
         "SELECT id, body, created_at FROM notes WHERE item_id = ? ORDER BY created_at DESC, id DESC",
         (item_id,),
-    ).fetchall()
+    )
 
 
 def get_note(conn: sqlite3.Connection, note_id: int) -> sqlite3.Row | None:
-    return conn.execute(
+    return _select_one(
+        conn,
         f"SELECT id, body, created_at FROM notes WHERE id = ? AND item_id IN ({ACTIVE_ITEM_IDS})",
         (note_id,),
-    ).fetchone()
+    )
 
 
 def insert_note(conn: sqlite3.Connection, item_id: int, fields: dict) -> int | None:
@@ -207,17 +250,19 @@ _RECORD_COLUMNS = "id, date, summary, cost, contractor_info"
 
 
 def list_records(conn: sqlite3.Connection, item_id: int) -> list[sqlite3.Row]:
-    return conn.execute(
+    return _select(
+        conn,
         f"SELECT {_RECORD_COLUMNS} FROM maintenance_records WHERE item_id = ? ORDER BY date DESC, id DESC",
         (item_id,),
-    ).fetchall()
+    )
 
 
 def get_record(conn: sqlite3.Connection, record_id: int) -> sqlite3.Row | None:
-    return conn.execute(
+    return _select_one(
+        conn,
         f"SELECT {_RECORD_COLUMNS} FROM maintenance_records WHERE id = ? AND item_id IN ({ACTIVE_ITEM_IDS})",
         (record_id,),
-    ).fetchone()
+    )
 
 
 def insert_record(conn: sqlite3.Connection, item_id: int, fields: dict) -> int | None:
