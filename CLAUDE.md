@@ -56,7 +56,7 @@ Windows with Git Bash. On Linux/macOS, use `.venv/bin/` instead of `.venv/Script
 .venv/Scripts/pytest                              # backend tests
 .venv/Scripts/python backend/GoldrynBackend.py    # API (+ built frontend) on http://127.0.0.1:8000
 cd frontend && npm run dev                        # Vite on :5173, proxies /api to :8000
-cd frontend && npm run build && npm run lint && npm test
+cd frontend && npm run format && npm run build && npm run lint && npm test
 ./run.sh                                          # build frontend + serve on :8000
 ```
 
@@ -86,7 +86,7 @@ The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PAS
   - The frontend maps both 400 and 422 to the "Invalid data" toast.
 
 **Frontend**
-- **Code style.** TypeScript with single quotes, no semicolons, and lines up to about 120 characters. There's no Prettier config yet, so match the surrounding code.
+- **Code style.** Prettier owns formatting (`frontend/.prettierrc.json`: single quotes, no semicolons, 120-character lines). Run `npm run format` after editing; `npm run lint` fails on unformatted files (the build doesn't check).
 - **Toasts.** Every POST/PATCH/DELETE goes through App's `mutate`. It shows the toast, refetches the grid on success, and bounces to login on 401. GETs don't toast.
 - **Saving.** Fields save on blur, and only when the value changed (`EditableField`). Escape blurs first so an in-progress edit is saved, then closes the panel.
 - **Cards and panel.**

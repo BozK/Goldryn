@@ -3,30 +3,36 @@ import { formatDay, formatTimestamp, isPastDue, todayYmd } from './dates'
 
 describe('formatDay', () => {
   it('formats a YYYY-MM-DD string as a local calendar day', () => {
-    expect(formatDay('2026-11-15')).toBe(new Date(2026, 10, 15).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }))
+    expect(formatDay('2026-11-15')).toBe(
+      new Date(2026, 10, 15).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+    )
   })
 
   it('does not shift across the new year', () => {
-    expect(formatDay('2026-01-01')).toBe(new Date(2026, 0, 1).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }))
+    expect(formatDay('2026-01-01')).toBe(
+      new Date(2026, 0, 1).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+    )
   })
 })
 
 describe('formatTimestamp', () => {
   it('formats an ISO timestamp as a local calendar day', () => {
     const iso = '2026-01-04T12:00:00Z'
-    expect(formatTimestamp(iso)).toBe(new Date(iso).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }))
+    expect(formatTimestamp(iso)).toBe(
+      new Date(iso).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+    )
   })
 })
 

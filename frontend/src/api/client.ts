@@ -69,8 +69,7 @@ export const api = {
   deleteItem: (id: number) => request<MessageResponse>('DELETE', `/api/items/${id}`),
 
   // -------- Notes --------
-  createNote: (itemId: number, note: NoteCreate) =>
-    request<Note>('POST', `/api/items/${itemId}/notes`, note),
+  createNote: (itemId: number, note: NoteCreate) => request<Note>('POST', `/api/items/${itemId}/notes`, note),
   updateNote: (id: number, patch: NotePatch) => request<Note>('PATCH', `/api/notes/${id}`, patch),
   deleteNote: (id: number) => request<MessageResponse>('DELETE', `/api/notes/${id}`),
 
@@ -79,6 +78,5 @@ export const api = {
     request<MaintenanceRecord>('POST', `/api/items/${itemId}/maintenance_records`, record),
   updateRecord: (id: number, patch: MaintenanceRecordPatch) =>
     request<MaintenanceRecord>('PATCH', `/api/maintenance_records/${id}`, patch),
-  deleteRecord: (id: number) =>
-    request<MessageResponse>('DELETE', `/api/maintenance_records/${id}`),
+  deleteRecord: (id: number) => request<MessageResponse>('DELETE', `/api/maintenance_records/${id}`),
 }

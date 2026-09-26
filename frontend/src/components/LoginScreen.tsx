@@ -48,11 +48,7 @@ export function LoginScreen({ onLoggedIn, onError }: LoginScreenProps) {
           className="field-input"
           disabled={isSubmitting}
         />
-        <button
-          type="submit"
-          className="btn-gold w-full"
-          disabled={isSubmitting || !username || !password}
-        >
+        <button type="submit" className="btn-gold w-full" disabled={isSubmitting || !username || !password}>
           {isSubmitting ? 'Logging in...' : 'Log in'}
         </button>
       </form>

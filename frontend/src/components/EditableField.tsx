@@ -88,7 +88,7 @@ export function EditableField({
         onFocus={() => setIsEditing(true)}
         className={`${box} cursor-text whitespace-pre-wrap break-words hover:bg-white/10`}
       >
-        {draft ? (display ? display(draft) : draft) : <span className="text-white/45">{placeholder}</span>}
+        {draft ? (display?.(draft) ?? draft) : <span className="text-white/45">{placeholder}</span>}
       </div>
     )
   }

@@ -20,9 +20,7 @@ interface RecordCardProps {
 
 function formatCost(raw: string): string {
   const value = parseCost(raw)
-  return typeof value === 'number'
-    ? value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
-    : raw
+  return typeof value === 'number' ? value.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : raw
 }
 
 export function RecordCard({ itemId, initial, accent, mutate, onSaved, onRemove }: RecordCardProps) {
