@@ -46,6 +46,7 @@ frontend/src/
   palette.ts          color name → {bg, accent}; unknown/null → Slate
 bruno/                one request per endpoint, runs in order
 run.sh                build the frontend, then serve everything on :8000
+run.ps1               same, for PowerShell
 ```
 
 ## Commands
@@ -58,6 +59,7 @@ Windows with Git Bash. On Linux/macOS, use `.venv/bin/` instead of `.venv/Script
 cd frontend && npm run dev                        # Vite on :5173, proxies /api to :8000
 cd frontend && npm run format && npm run build && npm run lint && npm test
 ./run.sh                                          # build frontend + serve on :8000
+.\run.ps1                                          # same, from PowerShell
 ```
 
 The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PASSWORD_HASH`, and `GOLDRYN_COOKIE_SECURE=false` for local http. Tests don't read `.env`; they build their own `Settings`.

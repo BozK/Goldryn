@@ -32,6 +32,8 @@ To run it with uvicorn directly (e.g. with `--reload`), it's an app factory. `--
 ./run.sh   # builds frontend/dist, then serves it and the API on http://127.0.0.1:8000
 ```
 
+On Windows PowerShell, use `.\run.ps1` instead.
+
 ## Manual API testing (Bruno)
 
 `bruno/` is a [Bruno](https://www.usebruno.com/) collection covering every endpoint on its happy path, in order (login, CRUD, archive, logout). IDs from each create are passed to the requests after it, and Bruno's cookie jar carries the session. Pick the `local` environment and set the `username` and `password` secrets, which Bruno keeps locally and never writes to the collection files. It needs `GOLDRYN_COOKIE_SECURE=false`, since the local server is plain http. Error cases are covered by pytest, not Bruno.
