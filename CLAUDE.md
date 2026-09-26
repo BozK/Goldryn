@@ -86,7 +86,7 @@ The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PAS
   - The frontend maps both 400 and 422 to the "Invalid data" toast.
 
 **Frontend**
-- **Code style.** Prettier owns formatting (`frontend/.prettierrc.json`: single quotes, no semicolons, 120-character lines). Run `npm run format` after editing; `npm run build` fails on unformatted files.
+- **Code style.** Prettier owns formatting (`frontend/.prettierrc.json`: single quotes, no semicolons, 120-character lines). Run `npm run format` after editing; `npm run lint` fails on unformatted files (the build doesn't check).
 - **Toasts.** Every POST/PATCH/DELETE goes through App's `mutate`. It shows the toast, refetches the grid on success, and bounces to login on 401. GETs don't toast.
 - **Saving.** Fields save on blur, and only when the value changed (`EditableField`). Escape blurs first so an in-progress edit is saved, then closes the panel.
 - **Cards and panel.**

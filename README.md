@@ -45,6 +45,6 @@ cd frontend
 npm install
 npm run dev     # http://localhost:5173, proxies /api to the backend on 127.0.0.1:8000
 npm run build   # type-check + production build into frontend/dist
-npm run lint
-npm run format  # Prettier; `npm run build` refuses to build unformatted code
+npm run lint    # oxlint + Prettier check
+npm run format  # Prettier: rewrite files into the house style
 ```

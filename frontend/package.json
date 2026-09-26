@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "prettier --check . && tsc -b && vite build",
-    "lint": "oxlint",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint && prettier --check .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "preview": "vite preview",
