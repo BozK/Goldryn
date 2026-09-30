@@ -23,7 +23,7 @@ export function ItemCard({ item, isSelected, isDimmed, onSelect }: ItemCardProps
       style={{ backgroundColor: bg, borderColor: accent }}
       animate={{ opacity: isDimmed ? 0.55 : 1 }}
       whileHover={{ scale: 1.03 }}
-      className={`clip-corners flex h-36 w-60 shrink-0 flex-col justify-between border-l-4 px-6 py-4 text-left ${
+      className={`clip-corners flex h-36 w-60 shrink-0 flex-col justify-between border-l-8 px-8 py-6 text-left ${
         isSelected ? 'brightness-125' : ''
       }`}
     >

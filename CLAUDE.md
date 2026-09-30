@@ -46,6 +46,7 @@ frontend/src/
   palette.ts          color name → {bg, accent}; unknown/null → Slate
 bruno/                one request per endpoint, runs in order
 run.sh                build the frontend, then serve everything on :8000
+run.ps1               same, for PowerShell
 ```
 
 ## Commands
@@ -58,6 +59,7 @@ Windows with Git Bash. On Linux/macOS, use `.venv/bin/` instead of `.venv/Script
 cd frontend && npm run dev                        # Vite on :5173, proxies /api to :8000
 cd frontend && npm run format && npm run build && npm run lint && npm test
 ./run.sh                                          # build frontend + serve on :8000
+.\run.ps1                                          # same, from PowerShell
 ```
 
 The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PASSWORD_HASH`, and `GOLDRYN_COOKIE_SECURE=false` for local http. Tests don't read `.env`; they build their own `Settings`.
@@ -90,7 +92,7 @@ The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PAS
 - **Toasts.** Every POST/PATCH/DELETE goes through App's `mutate`. It shows the toast, refetches the grid on success, and bounces to login on 401. GETs don't toast.
 - **Saving.** Fields save on blur, and only when the value changed (`EditableField`). Escape blurs first so an in-progress edit is saved, then closes the panel.
 - **Cards and panel.**
-  - Cards use the `clip-corners` utility defined in `index.css`.
+  - Item cards, notes and records use the `clip-corners` utility in `index.css` (a `shape()` clip-path). Tune it per element with `clip-cut-*` and `clip-round-*`, e.g. notes and records use `clip-cut-4`.
   - A new item's panel docks on the left half. An existing item's panel docks on the right 3/5.
   - The grid shifts to the other side.
 - **Colors.** The backend stores a palette name such as `"Green"`, and `palette.ts` owns the actual colors.

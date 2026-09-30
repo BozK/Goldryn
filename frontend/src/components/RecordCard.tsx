@@ -62,7 +62,7 @@ export function RecordCard({ itemId, initial, accent, mutate, onSaved, onRemove 
   }
 
   return (
-    <div className="group relative space-y-1 rounded-2xl p-4 pr-9 shadow" style={{ backgroundColor: accent }}>
+    <div className="group relative clip-corners clip-cut-4 space-y-1 p-4 pr-9" style={{ backgroundColor: accent }}>
       <EditableField
         value={saved?.date ?? draftDate}
         onCommit={(date) => void save({ date })}
