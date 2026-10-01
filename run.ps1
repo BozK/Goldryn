@@ -11,6 +11,7 @@ if (Test-Path .venv/Scripts/python.exe) {
 
 Push-Location frontend
 try {
+    npm install
     npm run build
     if ($LASTEXITCODE -ne 0) { throw "npm run build failed with exit code $LASTEXITCODE" }
 } finally {

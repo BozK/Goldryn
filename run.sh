@@ -10,5 +10,5 @@ else
   PYTHON=.venv/bin/python
 fi
 
-(cd frontend && npm run build)
+(cd frontend && npm install && npm run build)
 exec "$PYTHON" backend/GoldrynBackend.py
