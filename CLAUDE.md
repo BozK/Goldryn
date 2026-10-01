@@ -11,9 +11,10 @@ Read these before changing behavior. They are the source of truth, and this file
 - `BACKEND_DESIGN.md`: endpoints, response shapes, status codes, validation rules, auth.
 - `DB_DESIGN.md`: schema and rationale, timestamp format, migrations.
 - `FRONTEND_DESIGN.md`: components, animation, color mapping, toast behavior.
+- `TAGS_PHASE1.md`: the tags design end to end, including the alternatives that were rejected.
 - `README.md`: setup and run commands.
 
-**Scope.** Phase 1 is what exists now. Tags and search are deferred to Phase 2. The `tags`/`item_tags` tables exist in the schema, but no endpoint uses them yet.
+**Scope.** Phase 1 is what exists now, tags included. Search is deferred to Phase 2.
 
 ## Stack
 
@@ -40,8 +41,8 @@ backend/
 frontend/src/
   App.tsx             auth state, view mode (list/panel), toast, the `mutate` wrapper
   api/client.ts       fetch wrapper; throws ApiError(status), status 0 = unreachable
-  lib/                shared types, date helpers, toast copy (unit-tested)
-  components/         LoginScreen, LandingPage, ItemCard, ItemPanel, NoteCard, RecordCard, EditableField, ColorPicker, FeedbackToast
+  lib/                shared types, date helpers, toast copy, tag matching (unit-tested)
+  components/         LoginScreen, LandingPage, ItemCard, ItemPanel, NoteCard, RecordCard, EditableField, ColorPicker, TagInput, FeedbackToast
   useCreateThenUpdate.ts  save-on-blur: first save POSTs, later saves PATCH
   palette.ts          color name → {bg, accent}; unknown/null → Slate
 bruno/                one request per endpoint, runs in order
@@ -78,6 +79,7 @@ The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PAS
   - `null` clears a nullable column.
   - `null` for `name`/`body`/`date` is a 422: those fields are typed non-optional with a `None` default.
 - **Writes return the resource.** POST and PATCH return the full resource. The frontend replaces its local copy with the response, so don't return just a message.
+- **Tags.** They're a `tags: string[]` field on items, not their own resource. The server lowercases the names, creates any new tag, and replaces the item's links in one `db.transaction()`. `GET /api/tags` exists only for suggestions. Max 3 per item.
 - **Archiving.** Deleting an item is a soft delete (`archived_at`). Archived items and their notes and records behave as 404 everywhere. Notes and records are hard-deleted.
 - **`next_due`.** Computed only on the server, by `next_due()` in `GoldrynBackend.py`. The frontend never derives it.
 - **Status codes.**

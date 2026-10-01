@@ -19,9 +19,17 @@ GET    /api/me
 GET    /api/items              # landing page list
 GET    /api/items/{id}         # detail view (item + notes + maintenance_records)
 POST   /api/items              # create
-PATCH  /api/items/{id}         # partial update (name, color, cadence_days, next_maintenance_notes)
+PATCH  /api/items/{id}         # partial update (name, color, cadence_days, next_maintenance_notes, tags)
 DELETE /api/items/{id}         # soft delete (sets archived_at)
 ```
+
+### Tags
+
+```
+GET    /api/tags               # tags in use, for the tag input's suggestions
+```
+
+Tags are created, attached and removed through an item's `tags` field, not their own endpoints. See `TAGS_PHASE1.md`.
 
 ### Notes
 
@@ -39,7 +47,7 @@ PATCH  /api/maintenance_records/{id}
 DELETE /api/maintenance_records/{id}
 ```
 
-**Explicitly deferred to Phase 2:** tags (`GET/POST /api/tags`, attach/detach on an item), and search.
+**Deferred to Phase 2:** search. Tags moved into Phase 1; `TAGS_PHASE1.md` has the full design.
 
 ## Response shapes
 
@@ -66,6 +74,7 @@ DELETE /api/maintenance_records/{id}
   "next_maintenance_notes": "Need a 3rd-party filter, not OEM",
   "created_at": "2026-01-04T12:00:00Z",
   "next_due": "2026-11-13",
+  "tags": ["kitchen", "filters"],   // lowercase, in the order they were added
   "notes": [ { "id": 1, "body": "...", "created_at": "..." } ],
   "maintenance_records": [
     { "id": 1, "date": "2026-08-15", "summary": "...", "cost": 45.00, "contractor_info": "..." }
@@ -75,7 +84,16 @@ DELETE /api/maintenance_records/{id}
 
 Notes are ordered newest first (`created_at DESC, id DESC`), maintenance records by `date DESC, id DESC`.
 
-**Writes return the resource.** `POST`/`PATCH /api/items[/{id}]` return the item header (every field above except `notes` and `maintenance_records`, `next_due` included). Note and maintenance record `POST`/`PATCH` return that note or record. The frontend's save-on-blur replaces its local copy with whatever comes back, so this is required, not a convenience. `DELETE`s return `{"message": "..."}`.
+**`GET /api/tags`** — tags that at least one active item uses, most-used first, then by name:
+
+```json
+[
+  { "name": "hvac", "item_count": 2 },
+  { "name": "kitchen", "item_count": 1 }
+]
+```
+
+**Writes return the resource.** `POST`/`PATCH /api/items[/{id}]` return the item header (every field above except `notes` and `maintenance_records`, `next_due` and `tags` included). Note and maintenance record `POST`/`PATCH` return that note or record. The frontend's save-on-blur replaces its local copy with whatever comes back, so this is required, not a convenience. `DELETE`s return `{"message": "..."}`.
 
 ## Status codes and validation
 
@@ -97,6 +115,7 @@ Validation rules:
 - `body`: must contain a non-whitespace character.
 - `date`: `YYYY-MM-DD` and a real calendar date. No timestamps or other formats.
 - `cost`: number ≥ 0 or null.
+- `tags`: a list of names. Each is trimmed, has inner whitespace collapsed to single spaces, and is lowercased, then must be 1–32 characters. Duplicates collapse to the first occurrence, after which at most 3 may remain. On `PATCH` the list replaces the item's tags; `[]` clears them and `null` is a 422. A name that doesn't exist yet is created.
 - Path ids must be positive integers in SQLite's 64-bit range (422 otherwise).
 
 ## Design notes
@@ -143,7 +162,7 @@ Validation rules:
 
 - **Single process, single worker.** Sessions live in memory (see auth above). Run it as `python backend/GoldrynBackend.py`, which serves the API and the built `frontend/dist` on 127.0.0.1:8000, or use `./run.sh` to build the frontend first. `GET /health` is an unauthenticated liveness check.
 
-- **Tags are entirely out of scope for Phase 1.** No Phase 1 endpoint reads or writes `tags` / `item_tags`. The schema already supports them (join table, cascade deletes, unique constraint on tag name), so Phase 2 adds endpoints without any migration or reshaping of what ships here.
+- **Tags are a field on the item, not a resource of their own.** The client sends names; the server finds or creates each tag and replaces the item's links in the same transaction as the item's other fields (`db.transaction()`), so the client never has to know whether a tag is new. `GET /api/tags` exists only for suggestions and leaves out tags no active item uses. No migration was needed: the `tags` / `item_tags` tables shipped in migration 1. Full design and the rejected alternatives: `TAGS_PHASE1.md`.
 
 ## Logging
 

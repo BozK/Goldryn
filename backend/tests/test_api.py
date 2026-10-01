@@ -39,6 +39,7 @@ def create_record(client, item_id, **fields):
         ("POST", "/api/items"),
         ("PATCH", "/api/items/1"),
         ("DELETE", "/api/items/1"),
+        ("GET", "/api/tags"),
         ("POST", "/api/items/1/notes"),
         ("PATCH", "/api/notes/1"),
         ("DELETE", "/api/notes/1"),
@@ -67,6 +68,7 @@ def test_create_item_returns_full_item(client):
         "next_maintenance_notes": "Not OEM",
         "created_at": item["created_at"],
         "next_due": None,
+        "tags": [],
     }
     assert TIMESTAMP.match(item["created_at"])
 
@@ -74,6 +76,7 @@ def test_create_item_returns_full_item(client):
 def test_create_item_name_only(client):
     item = create_item(client)
     assert (item["color"], item["cadence_days"], item["next_maintenance_notes"]) == (None, None, None)
+    assert item["tags"] == []
 
 
 def test_create_item_trims_name(client):
@@ -228,6 +231,103 @@ def test_archive_keeps_rows_in_db(client, settings):
 
 def test_delete_missing_item_is_404(client):
     assert client.delete("/api/items/999").status_code == 404
+
+
+# ============================================================================
+# Tags
+# ============================================================================
+
+
+def set_tags(client, item_id, tags):
+    res = client.patch(f"/api/items/{item_id}", json={"tags": tags})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def test_create_item_with_tags_normalizes_them(client):
+    item = create_item(client, tags=["  HVAC ", "Water   Heater"])
+    assert item["tags"] == ["hvac", "water heater"]
+    assert client.get(f"/api/items/{item['id']}").json()["tags"] == ["hvac", "water heater"]
+
+
+def test_patch_tags_replaces_the_set_in_order(client):
+    item = create_item(client, tags=["hvac", "basement"])
+    assert set_tags(client, item["id"], ["kitchen", "hvac"])["tags"] == ["kitchen", "hvac"]
+
+
+def test_patch_without_tags_keeps_them_and_empty_list_clears(client):
+    item = create_item(client, tags=["hvac"])
+    assert client.patch(f"/api/items/{item['id']}", json={"name": "Furnace"}).json()["tags"] == ["hvac"]
+    assert set_tags(client, item["id"], [])["tags"] == []
+
+
+def test_tags_are_shared_across_items_case_insensitively(client, settings):
+    import sqlite3
+
+    first = create_item(client, name="Furnace", tags=["HVAC"])
+    second = create_item(client, name="AC", tags=["hvac"])
+    assert first["tags"] == second["tags"] == ["hvac"]
+    assert sqlite3.connect(settings.db_path).execute("SELECT COUNT(*) FROM tags").fetchone()[0] == 1
+
+
+def test_duplicate_tags_collapse_before_the_limit(client):
+    item = create_item(client, tags=["hvac", "HVAC", " hvac ", "a", "b"])
+    assert item["tags"] == ["hvac", "a", "b"]
+
+
+@pytest.mark.parametrize(
+    "tags",
+    [
+        ["a", "b", "c", "d"],
+        [""],
+        ["   "],
+        ["x" * 33],
+        "hvac",
+        [None],
+    ],
+)
+def test_tag_validation(client, tags):
+    assert client.post("/api/items", json={"name": "Furnace", "tags": tags}).status_code == 422
+    item = create_item(client, tags=["keep"])
+    assert client.patch(f"/api/items/{item['id']}", json={"tags": tags}).status_code == 422
+    assert client.get(f"/api/items/{item['id']}").json()["tags"] == ["keep"]
+
+
+def test_patch_null_tags_is_422(client):
+    item = create_item(client)
+    assert client.patch(f"/api/items/{item['id']}", json={"tags": None}).status_code == 422
+
+
+def test_tag_name_at_max_length(client):
+    assert create_item(client, tags=["x" * 32])["tags"] == ["x" * 32]
+
+
+def test_patch_tags_on_missing_item_creates_nothing(client, settings):
+    import sqlite3
+
+    assert client.patch("/api/items/999", json={"tags": ["hvac"]}).status_code == 404
+    assert sqlite3.connect(settings.db_path).execute("SELECT COUNT(*) FROM tags").fetchone()[0] == 0
+
+
+def test_list_tags_most_used_first_then_by_name(client):
+    create_item(client, name="Furnace", tags=["hvac", "basement"])
+    create_item(client, name="AC", tags=["hvac", "attic"])
+    res = client.get("/api/tags")
+    assert res.status_code == 200
+    assert res.json() == [
+        {"name": "hvac", "item_count": 2},
+        {"name": "attic", "item_count": 1},
+        {"name": "basement", "item_count": 1},
+    ]
+
+
+def test_list_tags_skips_unused_and_archived(client):
+    assert client.get("/api/tags").json() == []
+    removed = create_item(client, name="Gutters", tags=["outside"])
+    archived = create_item(client, name="Old filter", tags=["kitchen"])
+    set_tags(client, removed["id"], [])
+    client.delete(f"/api/items/{archived['id']}")
+    assert client.get("/api/tags").json() == []
 
 
 # ============================================================================

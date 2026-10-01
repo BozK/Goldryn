@@ -61,6 +61,10 @@ CREATE TABLE item_tags (
 
 - **Tags table is separate** from a free-text field specifically to support autocomplete suggestions when creating new items.
 
+- **Tag names are stored lowercase.** The API normalizes every name (trimmed, single spaces, lowercase) before it reaches the DB, so the plain `UNIQUE` on `tags.name` is case-insensitive in effect and no `COLLATE NOCASE` index is needed. An item's tags come back in the order they were added, via `ORDER BY item_tags.rowid`: saving replaces all of an item's links in list order. Tags no active item uses stay in the table; `GET /api/tags` just doesn't list them. See `TAGS_PHASE1.md`.
+
+- **Multi-statement writes use `db.transaction()`.** Each helper write normally commits on its own. Inside a `with db.transaction(conn):` block they commit together, or all roll back if the block raises. Saving an item together with its tags uses this.
+
 - **Items use soft delete via `archived_at`** (nullable timestamp, NULL = active). Deleting an item ("removing" it from the UI) sets `archived_at` to the current timestamp (same format as `created_at`) instead of a hard `DELETE`, so notes and maintenance history survive a delete-then-regret (e.g. sold the water filter, replaced the whole unit). Default item list queries should filter `WHERE archived_at IS NULL`; a hard-delete/purge path can be added later if you actually want one. `ON DELETE CASCADE` on child tables still applies if an item row is ever truly purged.
 
 - **Foreign keys are enabled per connection.** SQLite ships with FK enforcement off, and the setting doesn't persist in the file. `db.connect()` runs `PRAGMA foreign_keys = ON` on every connection; without it, `REFERENCES` and `ON DELETE CASCADE` are silently ignored.

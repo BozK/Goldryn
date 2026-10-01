@@ -13,6 +13,7 @@ import type {
   Note,
   NoteCreate,
   NotePatch,
+  TagSummary,
 } from '../lib/GoldrynModels'
 
 /**
@@ -67,6 +68,9 @@ export const api = {
   createItem: (item: ItemCreate) => request<Item>('POST', '/api/items', item),
   updateItem: (id: number, patch: ItemPatch) => request<Item>('PATCH', `/api/items/${id}`, patch),
   deleteItem: (id: number) => request<MessageResponse>('DELETE', `/api/items/${id}`),
+
+  // -------- Tags --------
+  listTags: () => request<TagSummary[]>('GET', '/api/tags'),
 
   // -------- Notes --------
   createNote: (itemId: number, note: NoteCreate) => request<Note>('POST', `/api/items/${itemId}/notes`, note),
