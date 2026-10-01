@@ -34,6 +34,18 @@ To run it with uvicorn directly (e.g. with `--reload`), it's an app factory. `--
 
 On Windows PowerShell, use `.\run.ps1` instead.
 
+## Deploying
+
+On the home server, Goldryn runs as a systemd service under its own `goldryn` user, behind Caddy and Cloudflare. `DEPLOY_NOTES.md` covers the one-time setup (user, Python 3.14 venv, unit file, Caddy) and the reasoning behind it.
+
+To update after setup:
+
+```sh
+cd /opt/Repos/Goldryn && git pull
+./prodBuild.sh                      # npm ci + build frontend/dist, sync the venv
+sudo systemctl restart goldryn      # logs you out: sessions live in memory
+```
+
 ## Manual API testing (Bruno)
 
 `bruno/` is a [Bruno](https://www.usebruno.com/) collection covering every endpoint on its happy path, in order (login, CRUD, archive, logout). IDs from each create are passed to the requests after it, and Bruno's cookie jar carries the session. Pick the `local` environment and set the `username` and `password` secrets, which Bruno keeps locally and never writes to the collection files. It needs `GOLDRYN_COOKIE_SECURE=false`, since the local server is plain http. Error cases are covered by pytest, not Bruno.

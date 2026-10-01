@@ -12,6 +12,8 @@ Read these before changing behavior. They are the source of truth, and this file
 - `DB_DESIGN.md`: schema and rationale, timestamp format, migrations.
 - `FRONTEND_DESIGN.md`: components, animation, color mapping, toast behavior.
 - `README.md`: setup and run commands.
+- `DEPLOY_NOTES.md`: home-server deployment (systemd unit, service user, uv venv, Caddy).
+- `TODOs.md`: open work by priority.
 
 **Scope.** Phase 1 is what exists now. Tags and search are deferred to Phase 2. The `tags`/`item_tags` tables exist in the schema, but no endpoint uses them yet.
 
@@ -47,6 +49,7 @@ frontend/src/
 bruno/                one request per endpoint, runs in order
 run.sh                build the frontend, then serve everything on :8000
 run.ps1               same, for PowerShell
+prodBuild.sh          on the server after a pull: npm ci + build, pip install into .venv
 ```
 
 ## Commands
