@@ -10,7 +10,8 @@ py -3.14 -m venv .venv
 .venv/Scripts/pip install -r requirements-dev.txt
 
 cp .env.example .env
-.venv/Scripts/python backend/hash_password.py   # paste the printed line into .env, set GOLDRYN_USERNAME
+.venv/Scripts/python backend/hash_password.py   # paste the printed line into .env, set GOLDRYN_USERNAME,
+                                                # and uncomment GOLDRYN_COOKIE_SECURE=false
 
 .venv/Scripts/python backend/GoldrynBackend.py  # http://127.0.0.1:8000
 .venv/Scripts/pytest
@@ -29,21 +30,19 @@ To run it with uvicorn directly (e.g. with `--reload`), it's an app factory. `--
 ## Running it all
 
 ```sh
-./run.sh   # builds frontend/dist, then serves it and the API on http://127.0.0.1:8000
+./dev.sh   # builds frontend/dist, then serves it and the API on http://127.0.0.1:8000
 ```
 
-On Windows PowerShell, use `.\run.ps1` instead.
+On Windows PowerShell, use `.\dev.ps1` instead. (`run.sh` is the server's Docker deploy script.)
 
 ## Deploying
 
-On the home server, Goldryn runs as a systemd service under its own `goldryn` user, behind Caddy and Cloudflare. `DEPLOY_NOTES.md` covers the one-time setup (user, Python 3.14 venv, unit file, Caddy) and the reasoning behind it.
+On the home server, Goldryn runs in Docker, behind Caddy and Cloudflare. The image is built on the server from the checkout. The database, logs and `.env` live outside the repo. `DEPLOY.md` covers the one-time setup.
 
 To update after setup:
 
 ```sh
-cd /opt/Repos/Goldryn && git pull
-./prodBuild.sh                      # npm ci + build frontend/dist, sync the venv
-sudo systemctl restart goldryn      # logs you out: sessions live in memory
+cd /srv/goldryn/app && git pull && ./run.sh   # docker compose up -d --build; logs you out: sessions live in memory
 ```
 
 ## Manual API testing (Bruno)

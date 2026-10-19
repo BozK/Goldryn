@@ -1,0 +1,25 @@
+# Expects /srv/goldryn/{app,data,.env}; this file lives in app/. See DEPLOY.md.
+name: goldryn
+
+services:
+  goldryn:
+    build:
+      context: .
+      args:
+        # Must match the owner of ../data
+        UID: ${APP_UID:-1000}
+    restart: unless-stopped
+    env_file: ../.env
+    # No FORWARDED_ALLOW_IPS: the app takes the client IP from Cloudflare's
+    # CF-Connecting-IP header (logger.py), never from the socket or X-Forwarded-For.
+    ports:
+      # Keep the 127.0.0.1 prefix: Docker-published ports bypass ufw
+      - "127.0.0.1:8002:8002"
+    volumes:
+      - ../data/db:/app/data
+      - ../data/logs:/app/logs
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

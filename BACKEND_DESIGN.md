@@ -141,7 +141,7 @@ Validation rules:
 
 - **No stored procedures.** SQLite doesn't support them in the Postgres/MySQL sense anyway, and nothing about this app's scale (single user, single process, low write volume) calls for pushing logic into the DB layer. Plain parameterized queries via small per-table helper functions, same pattern as ClipBackend's `get_user_by_username`.
 
-- **Single process, single worker.** Sessions live in memory (see auth above). Run it as `python backend/GoldrynBackend.py`, which serves the API and the built `frontend/dist` on 127.0.0.1:8000, or use `./run.sh` to build the frontend first. `GET /health` is an unauthenticated liveness check.
+- **Single process, single worker.** Sessions live in memory (see auth above). Run it as `python backend/GoldrynBackend.py`, which serves the API and the built `frontend/dist` on 127.0.0.1:8000 (`GOLDRYN_HOST`/`GOLDRYN_PORT` override it), or use `./dev.sh` to build the frontend first. In production it runs in Docker (see `DEPLOY.md`). `GET /health` is an unauthenticated liveness check.
 
 - **Tags are entirely out of scope for Phase 1.** No Phase 1 endpoint reads or writes `tags` / `item_tags`. The schema already supports them (join table, cascade deletes, unique constraint on tag name), so Phase 2 adds endpoints without any migration or reshaping of what ships here.
 
