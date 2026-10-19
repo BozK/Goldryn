@@ -16,8 +16,11 @@ ENV PYTHONUNBUFFERED=1 \
     GOLDRYN_DB_PATH=/app/data/goldryn.db \
     GOLDRYN_LOG_DIR=/app/logs
 
-ARG UID=1000
-RUN useradd --uid ${UID} --no-create-home --shell /usr/sbin/nologin goldryn
+# Run as the app's dedicated host user (UID/GID come from APP_UID/APP_GID in .env, see DEPLOY.md)
+ARG UID
+ARG GID
+RUN groupadd --gid ${GID} goldryn && \
+    useradd --uid ${UID} --gid ${GID} --no-create-home --shell /usr/sbin/nologin goldryn
 
 WORKDIR /app
 COPY requirements.txt .

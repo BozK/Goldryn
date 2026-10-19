@@ -1,4 +1,5 @@
 # Expects /srv/goldryn/{app,data,.env}; this file lives in app/. See DEPLOY.md.
+# app/.env is a symlink to ../.env, so compose can read APP_UID/APP_GID below.
 name: goldryn
 
 services:
@@ -6,8 +7,9 @@ services:
     build:
       context: .
       args:
-        # Must match the owner of ../data
-        UID: ${APP_UID:-1000}
+        # The goldryn system user that owns ../data. No default: never fall back to the login user's UID
+        UID: ${APP_UID:?APP_UID missing, see DEPLOY.md}
+        GID: ${APP_GID:?APP_GID missing, see DEPLOY.md}
     restart: unless-stopped
     env_file: ../.env
     # No FORWARDED_ALLOW_IPS: the app takes the client IP from Cloudflare's

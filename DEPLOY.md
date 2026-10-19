@@ -6,32 +6,47 @@ Goldryn runs on the home server in Docker. It sits next to PredictionGame (`game
 |---|---|
 | Domain | `goldryn.boz-k.com` (DNS through Cloudflare, proxied) |
 | Port | `127.0.0.1:8002`. PredictionGame has 8000 and pad has 8001 |
-| Container | Python 3.14, runs `backend/GoldrynBackend.py` as UID 1000, one worker |
+| Container | Python 3.14, runs `backend/GoldrynBackend.py` as the `goldryn` system user, one worker |
 
 ## Server layout
 
 ```
-/srv/goldryn/
-├── app/      <- this repo
-├── data/
-│   ├── db/   <- goldryn.db (mounted at /app/data)
-│   └── logs/ <- Goldryn-YYYY-MM-DD.log (mounted at /app/logs)
-└── .env      <- username, password hash, optional TZ
+/srv/goldryn/                owner: you
+├── app/                     owner: you   <- this repo (git clone)
+│   └── .env -> ../.env                   <- symlink so compose can read APP_UID/APP_GID
+├── data/                    owner: goldryn:goldryn, group-writable, setgid
+│   ├── db/                               <- goldryn.db (mounted at /app/data)
+│   └── logs/                             <- Goldryn-YYYY-MM-DD.log (mounted at /app/logs)
+└── .env                     owner: you, mode 600 <- APP_UID/APP_GID, username, password hash, TZ
 ```
 
-`docker compose` must be run from `app/`.
+`data/` and `.env` are the only things to back up. Run `docker compose` from `app/`.
+
+The container runs as a dedicated `goldryn` system user, not as you. If the app were compromised and escaped the container, it would land as an unprivileged user that can't read your home directory or use Docker. You're in the `goldryn` group, so you can still read the DB and logs without sudo.
 
 ## First-time setup
 
 ```sh
-sudo mkdir -p /srv/goldryn && sudo chown "$USER": /srv/goldryn
-cd /srv/goldryn
-git clone <repo-url> app
-mkdir -p data/db data/logs                 # before the first `up`, or Docker creates them as root
-cp app/.env.example .env
+# App user + folders
+sudo adduser --system --group --no-create-home goldryn
+sudo mkdir -p /srv/goldryn/data/db /srv/goldryn/data/logs
+sudo chown $USER:$USER /srv/goldryn
+sudo chown -R goldryn:goldryn /srv/goldryn/data
+sudo chmod -R g+rwX /srv/goldryn/data
+sudo find /srv/goldryn/data -type d -exec chmod g+s {} +
+sudo usermod -aG goldryn $USER             # log out and back in for this to apply
+
+# Code + config
+git clone git@github.com:BozK/Goldryn.git /srv/goldryn/app
+cp /srv/goldryn/app/.env.example /srv/goldryn/.env
+chmod 600 /srv/goldryn/.env
+ln -s ../.env /srv/goldryn/app/.env
+id goldryn                                 # put the uid/gid into .env as APP_UID/APP_GID
 ```
 
-The container runs as UID 1000, so `data/` must be owned by UID 1000. Check with `id -u`. If your login has a different UID, put `APP_UID=<uid>` in your shell environment when building (`APP_UID=$(id -u) ./run.sh`).
+Create `data/` yourself before the first `up`. If Docker creates the mount folders, root owns them and the container can't write to them.
+
+`compose.yaml` refuses to run without `APP_UID`/`APP_GID` rather than fall back to a default UID. If you see "APP_UID missing", either the `.env` values or the `app/.env` symlink is missing.
 
 Set the password hash. This builds the image the first time:
 
