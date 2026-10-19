@@ -1,0 +1,23 @@
+meta {
+  name: Update Item
+  type: http
+  seq: 8
+}
+
+patch {
+  url: {{base_url}}/api/items/{{itemId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "color": "Green",
+    "cadence_days": 60,
+    "tags": ["kitchen", "water"]
+  }
+}

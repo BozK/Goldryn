@@ -56,7 +56,7 @@ First save in "new" mode fires `POST /api/items`; the response's `id` is written
 
 Shared layout, top to bottom:
 
-1. **Header block** — `name` (large), `color` (palette picker), `cadence_days`, `next_maintenance_notes`, and (existing items only) `created_at`. All click-to-edit.
+1. **Header block** — `name` (large), `color` (palette picker), `cadence_days`, `next_maintenance_notes`, `tags` (up to 3 chips plus a type-ahead input, see `TAGS_PHASE1.md`), and (existing items only) `created_at`. All click-to-edit.
 2. **Notes section** — fixed 2-column layout, `+ Add New` control, sorted newest-first. Each note is a styled click-to-edit text wrapper (Keep-style), not a raw `<textarea>`.
 3. **Maintenance records section** — same 2-column layout, `+ Add New`, sorted newest-first by `date`. Each record is its own rounded-rectangle card with three independently click-to-edit fields: `summary`, `cost`, `contractor_info`.
 
@@ -66,6 +66,7 @@ In "new" mode, the Notes and Maintenance Records sections' `+ Add New` controls 
 
 - New item, first field blur → `POST /api/items` (subsequent header fields → `PATCH /api/items/{id}`)
 - Existing item header field blur → `PATCH /api/items/{id}`
+- Tag added (Enter, a picked suggestion, or blur with text in the input) or removed (its ×) → `PATCH /api/items/{id}` with the item's full tag list. Tags can't be added until the item exists.
 - New/edited note blur → `POST /api/items/{id}/notes` or `PATCH /api/notes/{id}`
 - New/edited maintenance record field blur → `POST /api/items/{id}/maintenance_records` or `PATCH /api/maintenance_records/{id}`
 
@@ -73,6 +74,9 @@ In "new" mode, the Notes and Maintenance Records sections' `+ Add New` controls 
 
 - `X` and click-outside close naturally rely on native event ordering — `blur` fires before the `click` that triggers the close, so the field's save is already in flight by the time the panel starts closing. The outside-click listener must be a plain `click` (or `mousedown` without `preventDefault()`) — `preventDefault()` on `mousedown` (a common pattern in dropdown/menu libraries to keep focus put) would suppress the blur and silently drop the edit.
 - `Escape` doesn't move focus on its own, so it gets an explicit flush: `document.activeElement?.blur()` before flipping `viewMode` back to `'list'`.
+- The tag input's open dropdown takes the first `Escape` (it stops propagation and only closes the list); the next one reaches the panel as usual.
+
+**Tag suggestions:** `App` fetches `GET /api/tags` after login and again whenever `refreshKey` changes (every successful write), and passes the list down to the panel's tag input.
 
 ### 4. FeedbackToast
 

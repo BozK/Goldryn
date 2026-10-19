@@ -1,0 +1,11 @@
+meta {
+  name: Delete Note
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{base_url}}/api/notes/{{noteId}}
+  body: none
+  auth: none
+}

@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Neutral dark surfaces; item colors come from src/palette.ts */
+  --color-surface: #101216;
+  --color-surface-raised: #191c22;
+  --color-surface-line: #2a2e36;
+  --color-gold: #d4a017;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-surface font-sans text-white antialiased;
+  }
+}
+
+/*
+ * The "clipped rectangle": top-left and bottom-right corners cut on a 45° diagonal, and
+ * all six resulting corners slightly rounded. Size-independent, so it works on fixed
+ * cards and on notes/records whose height follows their content.
+ *
+ * Tune per element with the helper utilities below, e.g.
+ *   clip-corners                        2rem cut, 0.375rem rounding (the defaults)
+ *   clip-corners clip-cut-4             1rem cut (spacing scale: 4 × 0.25rem)
+ *   clip-corners clip-cut-[1.25rem]     any length
+ *   clip-corners clip-round-2           0.5rem rounding; clip-round-0 for sharp corners
+ *
+ * The cut clips everything inside it, including borders and box-shadows.
+ */
+@utility clip-corners {
+  --_cut: var(--clip-cut, 2rem);
+  /* How far each rounded corner reaches along its edges. */
+  --_t: var(--clip-round, 0.375rem);
+  /* The same reach, measured along x or y on a 45° edge. */
+  --_d: calc(var(--_t) * 0.7071);
+  /* 90° corners round with radius t; the 135° corners at each end of a cut need
+     radius t / tan(22.5°) to meet their edges at the same points. */
+  --_r: calc(var(--_t) * 2.4142);
+
+  clip-path: shape(
+    from calc(var(--_cut) + var(--_t)) 0,
+    line to calc(100% - var(--_t)) 0,
+    arc to 100% var(--_t) of var(--_t) cw,
+    line to 100% calc(100% - var(--_cut) - var(--_t)),
+    arc to calc(100% - var(--_d)) calc(100% - var(--_cut) + var(--_d)) of var(--_r) cw,
+    line to calc(100% - var(--_cut) + var(--_d)) calc(100% - var(--_d)),
+    arc to calc(100% - var(--_cut) - var(--_t)) 100% of var(--_r) cw,
+    line to var(--_t) 100%,
+    arc to 0 calc(100% - var(--_t)) of var(--_t) cw,
+    line to 0 calc(var(--_cut) + var(--_t)),
+    arc to var(--_d) calc(var(--_cut) - var(--_d)) of var(--_r) cw,
+    line to calc(var(--_cut) - var(--_d)) var(--_d),
+    arc to calc(var(--_cut) + var(--_t)) 0 of var(--_r) cw,
+    close
+  );
+}
+
+@utility clip-cut-* {
+  --clip-cut: calc(var(--spacing) * --value(integer));
+  --clip-cut: --value([length]);
+}
+
+@utility clip-round-* {
+  --clip-round: calc(var(--spacing) * --value(number));
+  --clip-round: --value([length]);
+}
+
+@layer components {
+  .field-input {
+    @apply w-full rounded-lg border border-surface-line bg-surface-raised px-4 py-2 text-white placeholder-white/40 focus:border-gold focus:outline-none;
+  }
+
+  .btn-gold {
+    @apply rounded-lg bg-gold px-4 py-2 font-semibold text-surface transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Update Maintenance Record
+  type: http
+  seq: 13
+}
+
+patch {
+  url: {{base_url}}/api/maintenance_records/{{recordId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cost": 49.99,
+    "contractor_info": "Bob's Plumbing, 555-0100"
+  }
+}
