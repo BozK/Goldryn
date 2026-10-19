@@ -13,6 +13,8 @@ Read these before changing behavior. They are the source of truth, and this file
 - `FRONTEND_DESIGN.md`: components, animation, color mapping, toast behavior.
 - `TAGS_PHASE1.md`: the tags design end to end, including the alternatives that were rejected.
 - `README.md`: setup and run commands.
+- `DEPLOY.md`: home-server deployment (Docker, server layout, Caddy).
+- `TODOs.md`: open work by priority.
 
 **Scope.** Phase 1 is what exists now, tags included. Search is deferred to Phase 2.
 
@@ -30,7 +32,7 @@ Read these before changing behavior. They are the source of truth, and this file
 
 ```
 backend/
-  GoldrynBackend.py   create_app() factory, all routes, static mount of frontend/dist, __main__ → 127.0.0.1:8000
+  GoldrynBackend.py   create_app() factory, all routes, static mount of frontend/dist, __main__ → GOLDRYN_HOST:GOLDRYN_PORT (default 127.0.0.1:8000)
   GoldrynModels.py    Pydantic request/response models (mirror frontend/src/lib/GoldrynModels.tsx)
   db.py               connect(), get_db dependency, init_db() + MIGRATIONS, per-table query helpers
   auth.py             in-memory SessionStore, check_credentials, get_current_user dependency
@@ -46,8 +48,11 @@ frontend/src/
   useCreateThenUpdate.ts  save-on-blur: first save POSTs, later saves PATCH
   palette.ts          color name → {bg, accent}; unknown/null → Slate
 bruno/                one request per endpoint, runs in order
-run.sh                build the frontend, then serve everything on :8000
-run.ps1               same, for PowerShell
+dev.sh                build the frontend, then serve everything on :8000
+dev.ps1               same, for PowerShell
+Dockerfile            production image: frontend build stage, then Python 3.14 serving on :8002
+compose.yaml          expects /srv/goldryn/{app,data,.env}; publishes 127.0.0.1:8002 only
+run.sh                on the server: docker compose up -d --build
 ```
 
 ## Commands
@@ -59,11 +64,11 @@ Windows with Git Bash. On Linux/macOS, use `.venv/bin/` instead of `.venv/Script
 .venv/Scripts/python backend/GoldrynBackend.py    # API (+ built frontend) on http://127.0.0.1:8000
 cd frontend && npm run dev                        # Vite on :5173, proxies /api to :8000
 cd frontend && npm run format && npm run build && npm run lint && npm test
-./run.sh                                          # build frontend + serve on :8000
-.\run.ps1                                          # same, from PowerShell
+./dev.sh                                          # build frontend + serve on :8000
+.\dev.ps1                                          # same, from PowerShell
 ```
 
-The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PASSWORD_HASH`, and `GOLDRYN_COOKIE_SECURE=false` for local http. Tests don't read `.env`; they build their own `Settings`.
+The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PASSWORD_HASH`, and `GOLDRYN_COOKIE_SECURE=false` for local http. Tests don't read `.env`; they build their own `Settings`. Don't set `TZ` in a Windows `.env`: Python there misreads IANA names like `America/New_York` and gets local time wrong.
 
 ## Conventions and gotchas
 
