@@ -1,7 +1,7 @@
 meta {
   name: Update Item
   type: http
-  seq: 7
+  seq: 8
 }
 
 patch {
@@ -17,6 +17,7 @@ headers {
 body:json {
   {
     "color": "Green",
-    "cadence_days": 60
+    "cadence_days": 60,
+    "tags": ["kitchen", "water"]
   }
 }

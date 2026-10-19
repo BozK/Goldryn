@@ -3,7 +3,7 @@ import sqlite3
 
 import pytest
 
-from db import MIGRATIONS, connect, init_db
+from db import MIGRATIONS, connect, init_db, insert_item, transaction
 
 TIMESTAMP = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
 
@@ -62,3 +62,20 @@ def test_rows_are_addressable_by_name(db_path):
     conn.execute("INSERT INTO items (name, cadence_days) VALUES ('Filter', 90)")
     row = conn.execute("SELECT name, cadence_days FROM items").fetchone()
     assert (row["name"], row["cadence_days"]) == ("Filter", 90)
+
+
+def test_transaction_commits_helper_writes_together(db_path):
+    conn = connect(db_path)
+    with transaction(conn):
+        insert_item(conn, {"name": "Furnace"})
+        insert_item(conn, {"name": "Gutters"})
+    assert connect(db_path).execute("SELECT COUNT(*) FROM items").fetchone()[0] == 2
+
+
+def test_transaction_rolls_back_every_write_on_error(db_path):
+    conn = connect(db_path)
+    with pytest.raises(RuntimeError):
+        with transaction(conn):
+            insert_item(conn, {"name": "Furnace"})
+            raise RuntimeError("boom")
+    assert connect(db_path).execute("SELECT COUNT(*) FROM items").fetchone()[0] == 0

@@ -1,6 +1,7 @@
 import sqlite3
 import time
 from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi import Request
@@ -95,16 +96,35 @@ def _select_one(conn: sqlite3.Connection, sql: str, params: Sequence = ()) -> sq
 
 
 def _write(conn: sqlite3.Connection, sql: str, params: Sequence = ()) -> sqlite3.Cursor:
-    """Run one INSERT/UPDATE/DELETE and commit it (`with conn:` rolls back if it raises)."""
+    """
+    Run one INSERT/UPDATE/DELETE and commit it (`with conn:` rolls back if it raises).
+    Inside a transaction() block, the block commits instead.
+    """
     start = time.perf_counter()
     try:
-        with conn:
+        if conn.in_transaction:
             cursor = conn.execute(sql, params)
+        else:
+            with conn:
+                cursor = conn.execute(sql, params)
     except Exception as exc:
         logger.log_db_error(sql, params, exc, (time.perf_counter() - start) * 1000)
         raise
     logger.log_write(sql, params, cursor, (time.perf_counter() - start) * 1000)
     return cursor
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    """
+    Commit every helper write inside the block together, or none of them if it raises.
+
+    The explicit BEGIN makes conn.in_transaction true from the start, so _write
+    leaves committing to this block even for the first write.
+    """
+    with conn:
+        conn.execute("BEGIN")
+        yield
 
 
 # ============================================================================
@@ -211,6 +231,48 @@ def archive_item(conn: sqlite3.Connection, item_id: int) -> bool:
         (item_id,),
     )
     return cursor.rowcount == 1
+
+
+# -------- Tags --------
+
+
+def list_tags(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Tags at least one active item uses, most-used first. Unused tags stay in the table but aren't listed."""
+    return _select(
+        conn,
+        "SELECT t.name, COUNT(*) AS item_count FROM tags t "
+        "JOIN item_tags it ON it.tag_id = t.id "
+        f"WHERE it.item_id IN ({ACTIVE_ITEM_IDS}) "
+        "GROUP BY t.id ORDER BY item_count DESC, t.name",
+    )
+
+
+def list_item_tags(conn: sqlite3.Connection, item_id: int) -> list[str]:
+    """An item's tag names in the order they were added (set_item_tags inserts them in list order)."""
+    rows = _select(
+        conn,
+        "SELECT t.name FROM item_tags it JOIN tags t ON t.id = it.tag_id WHERE it.item_id = ? ORDER BY it.rowid",
+        (item_id,),
+    )
+    return [row["name"] for row in rows]
+
+
+def set_item_tags(conn: sqlite3.Connection, item_id: int, names: list[str]) -> None:
+    """
+    Replace an item's tags, creating any tag that doesn't exist yet. Call it inside
+    transaction() so a failure can't leave the item half-tagged.
+
+    Names arrive normalized (lowercase, single spaces) from the request model, so
+    the plain UNIQUE on tags.name is the duplicate check.
+    """
+    _write(conn, "DELETE FROM item_tags WHERE item_id = ?", (item_id,))
+    for name in names:
+        _write(conn, "INSERT INTO tags (name) VALUES (?) ON CONFLICT (name) DO NOTHING", (name,))
+        _write(
+            conn,
+            "INSERT INTO item_tags (item_id, tag_id) SELECT ?, id FROM tags WHERE name = ?",
+            (item_id, name),
+        )
 
 
 # -------- Notes --------

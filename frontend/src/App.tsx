@@ -3,6 +3,7 @@ import { AnimatePresence } from 'motion/react'
 import { api, ApiError } from './api/client'
 import { isAuthFailure, SAVED_TEXT, saveErrorText } from './lib/feedback'
 import type { Mutate, ToastMessage, ToastTone } from './lib/feedback'
+import type { TagSummary } from './lib/GoldrynModels'
 import { FeedbackToast } from './components/FeedbackToast'
 import { ItemPanel } from './components/ItemPanel'
 import type { PanelEntry } from './components/ItemPanel'
@@ -23,6 +24,7 @@ function App() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [toast, setToast] = useState<ToastMessage | null>(null)
   const toastCounter = useRef(0)
+  const [tagSuggestions, setTagSuggestions] = useState<TagSummary[]>([])
 
   useEffect(() => {
     api
@@ -30,6 +32,21 @@ function App() {
       .then(() => setAuth('authenticated'))
       .catch(() => setAuth('anonymous'))
   }, [])
+
+  // Refetched with the grid (every successful write bumps refreshKey), so a tag created
+  // on one item is suggested on the next. A failed fetch keeps the old list: suggestions
+  // are a convenience, and the grid's own fetch handles an expired session.
+  useEffect(() => {
+    if (auth !== 'authenticated') return
+    let cancelled = false
+    api
+      .listTags()
+      .then((tags) => !cancelled && setTagSuggestions(tags))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [auth, refreshKey])
 
   const showToast = useCallback((tone: ToastTone, text: string) => {
     toastCounter.current += 1
@@ -132,6 +149,7 @@ function App() {
                 key={panelKey}
                 itemId={selectedItemId}
                 enterFrom={panelEntry}
+                tagSuggestions={tagSuggestions}
                 mutate={mutate}
                 onCreated={handleItemCreated}
                 onClose={closePanel}

@@ -22,6 +22,7 @@ from GoldrynModels import (
     Note,
     NoteCreate,
     NotePatch,
+    TagSummary,
 )
 from logger import RequestLogMiddleware, configure_logging
 from settings import REPO_ROOT, Settings, load_settings
@@ -104,7 +105,11 @@ def load_item(conn: sqlite3.Connection, item_id: int) -> Item:
     row = db.get_item(conn, item_id)
     if row is None:
         raise not_found("Item")
-    return Item(**dict(row), next_due=next_due(row["last_maintenance_date"], row["cadence_days"]))
+    return Item(
+        **dict(row),
+        next_due=next_due(row["last_maintenance_date"], row["cadence_days"]),
+        tags=db.list_item_tags(conn, item_id),
+    )
 
 
 def load_note(conn: sqlite3.Connection, note_id: int) -> Note:
@@ -127,6 +132,9 @@ def load_record(conn: sqlite3.Connection, record_id: int) -> MaintenanceRecord:
 # Every route below requires a session. PATCH bodies use exclude_unset, so an
 # omitted field is left alone and an explicit null clears the column.
 # mode="json" turns dates into "YYYY-MM-DD" strings for SQLite.
+#
+# `tags` isn't a column: it's split off the body and written by
+# db.set_item_tags in the same transaction as the item's own fields.
 # ============================================================================
 
 api_router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
@@ -152,14 +160,21 @@ def get_item(item_id: Id, conn: Conn):
 
 @api_router.post("/items", response_model=Item, status_code=status.HTTP_201_CREATED)
 def create_item(body: ItemCreate, conn: Conn):
-    item_id = db.insert_item(conn, body.model_dump(mode="json"))
+    with db.transaction(conn):
+        item_id = db.insert_item(conn, body.model_dump(mode="json", exclude={"tags"}))
+        if body.tags:
+            db.set_item_tags(conn, item_id, body.tags)
     return load_item(conn, item_id)
 
 
 @api_router.patch("/items/{item_id}", response_model=Item)
 def update_item(item_id: Id, body: ItemPatch, conn: Conn):
-    if not db.update_item(conn, item_id, body.model_dump(mode="json", exclude_unset=True)):
-        raise not_found("Item")
+    with db.transaction(conn):
+        if not db.update_item(conn, item_id, body.model_dump(mode="json", exclude_unset=True, exclude={"tags"})):
+            raise not_found("Item")
+        # None only when omitted: the model rejects an explicit null.
+        if body.tags is not None:
+            db.set_item_tags(conn, item_id, body.tags)
     return load_item(conn, item_id)
 
 
@@ -169,6 +184,19 @@ def archive_item(item_id: Id, conn: Conn):
     if not db.archive_item(conn, item_id):
         raise not_found("Item")
     return MessageResponse(message="Item archived")
+
+
+# ============================================================================
+# Tag routes
+#
+# Tags are created and attached through an item's `tags` field; this only lists
+# them, for the tag input's suggestions.
+# ============================================================================
+
+
+@api_router.get("/tags", response_model=list[TagSummary])
+def list_tags(conn: Conn):
+    return [TagSummary(**row) for row in db.list_tags(conn)]
 
 
 # ============================================================================

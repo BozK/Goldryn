@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { motion } from 'motion/react'
-import type { Item, ItemDetail, ItemPatch, MaintenanceRecord, Note } from '../lib/GoldrynModels'
+import type { Item, ItemDetail, ItemPatch, MaintenanceRecord, Note, TagSummary } from '../lib/GoldrynModels'
 import { api, ApiError } from '../api/client'
 import { formatDay, formatTimestamp } from '../lib/dates'
 import { isAuthFailure, rejectInvalid } from '../lib/feedback'
@@ -13,6 +13,7 @@ import { ColorPicker } from './ColorPicker'
 import { EditableField } from './EditableField'
 import { NoteCard } from './NoteCard'
 import { RecordCard } from './RecordCard'
+import { TagInput } from './TagInput'
 
 export type PanelEntry = 'left' | 'right'
 
@@ -21,6 +22,8 @@ interface ItemPanelProps {
   itemId: number | null
   /** New items slide in from the left, existing ones from the right. */
   enterFrom: PanelEntry
+  /** Every tag in use, for the tag input's suggestions. */
+  tagSuggestions: TagSummary[]
   mutate: Mutate
   onCreated: (id: number) => void
   onClose: () => void
@@ -29,7 +32,15 @@ interface ItemPanelProps {
 
 type LoadState = { status: 'loading' } | { status: 'ready'; detail: ItemDetail | null } | { status: 'failed' }
 
-export function ItemPanel({ itemId, enterFrom, mutate, onCreated, onClose, onUnauthorized }: ItemPanelProps) {
+export function ItemPanel({
+  itemId,
+  enterFrom,
+  tagSuggestions,
+  mutate,
+  onCreated,
+  onClose,
+  onUnauthorized,
+}: ItemPanelProps) {
   const panelRef = useRef<HTMLElement>(null)
   const offscreen = enterFrom === 'left' ? '-100%' : '100%'
   // Docked on the side it slides in from; App shifts the grid to the other side.
@@ -106,7 +117,13 @@ export function ItemPanel({ itemId, enterFrom, mutate, onCreated, onClose, onUna
       {load.status === 'loading' && <p className="p-8 text-white/50">Loading...</p>}
       {load.status === 'failed' && <p className="p-8 text-red-300">Couldn't load this item.</p>}
       {load.status === 'ready' && (
-        <ItemPanelContent initial={load.detail} mutate={mutate} onCreated={onCreated} onArchived={onClose} />
+        <ItemPanelContent
+          initial={load.detail}
+          tagSuggestions={tagSuggestions}
+          mutate={mutate}
+          onCreated={onCreated}
+          onArchived={onClose}
+        />
       )}
     </motion.aside>
   )
@@ -143,12 +160,13 @@ function recordEntries(records: MaintenanceRecord[]): Entry<MaintenanceRecord>[]
 
 interface ItemPanelContentProps {
   initial: ItemDetail | null
+  tagSuggestions: TagSummary[]
   mutate: Mutate
   onCreated: (id: number) => void
   onArchived: () => void
 }
 
-function ItemPanelContent({ initial, mutate, onCreated, onArchived }: ItemPanelContentProps) {
+function ItemPanelContent({ initial, tagSuggestions, mutate, onCreated, onArchived }: ItemPanelContentProps) {
   const header = useCreateThenUpdate<Item, ItemPatch>({
     initial: initial && toItem(initial),
     canCreate: (pending) => Boolean(pending.name?.trim()),
@@ -189,6 +207,8 @@ function ItemPanelContent({ initial, mutate, onCreated, onArchived }: ItemPanelC
     setColor(next)
     void header.save({ color: next })
   }
+
+  const saveTags = async (tags: string[]) => (await header.save({ tags })) !== undefined
 
   const archive = async () => {
     if (!item || !window.confirm(`Archive "${item.name}"? It will disappear from the list.`)) return
@@ -242,6 +262,11 @@ function ItemPanelContent({ initial, mutate, onCreated, onArchived }: ItemPanelC
               placeholder="Anything to remember for next time"
               multiline
             />
+          </dd>
+
+          <dt className="pt-1 text-white/65">Tags</dt>
+          <dd>
+            <TagInput saved={item?.tags ?? null} suggestions={tagSuggestions} accent={accent} onSave={saveTags} />
           </dd>
         </dl>
 

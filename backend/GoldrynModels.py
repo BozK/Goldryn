@@ -11,7 +11,7 @@ import re
 from datetime import date
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints
 
 # ============================================================================
 # Field types
@@ -37,6 +37,27 @@ def _require_iso_date_string(value: object) -> object:
 
 
 IsoDate = Annotated[date, BeforeValidator(_require_iso_date_string)]
+
+MAX_TAGS = 3
+
+
+def _normalize_tag(value: object) -> object:
+    # One spelling per tag: "  Water   Heater " and "water heater" are the same tag.
+    if isinstance(value, str):
+        return " ".join(value.split()).lower()
+    return value
+
+
+def _dedupe_tags(tags: list[str]) -> list[str]:
+    # Counted after de-duplicating, so ["hvac", "HVAC", "a", "b"] is three tags, not four.
+    unique = list(dict.fromkeys(tags))
+    if len(unique) > MAX_TAGS:
+        raise ValueError(f"an item can have at most {MAX_TAGS} tags")
+    return unique
+
+
+TagName = Annotated[str, BeforeValidator(_normalize_tag), StringConstraints(min_length=1, max_length=32)]
+Tags = Annotated[list[TagName], AfterValidator(_dedupe_tags)]
 
 
 class RequestModel(BaseModel):
@@ -69,6 +90,7 @@ class ItemCreate(RequestModel):
     color: Color | None = None
     cadence_days: CadenceDays | None = None
     next_maintenance_notes: str | None = None
+    tags: Tags = []
 
 
 class ItemPatch(RequestModel):
@@ -76,6 +98,7 @@ class ItemPatch(RequestModel):
     color: Color | None = None
     cadence_days: CadenceDays | None = None
     next_maintenance_notes: str | None = None
+    tags: Tags = None  # replaces the whole set; omit to keep, [] to clear, null is rejected
 
 
 class ItemSummary(BaseModel):
@@ -98,6 +121,19 @@ class Item(BaseModel):
     next_maintenance_notes: str | None
     created_at: str
     next_due: date | None
+    tags: list[str]  # in the order they were added
+
+
+# ============================================================================
+# Tags
+# ============================================================================
+
+
+class TagSummary(BaseModel):
+    """One row of GET /api/tags: a tag at least one active item uses."""
+
+    name: str
+    item_count: int
 
 
 # ============================================================================

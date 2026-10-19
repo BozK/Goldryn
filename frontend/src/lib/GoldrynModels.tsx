@@ -36,6 +36,8 @@ export interface Item {
   next_maintenance_notes: string | null
   created_at: string
   next_due: string | null
+  /** Lowercase, in the order they were added; at most 3. */
+  tags: string[]
 }
 
 /** GET /api/items/{id}: the item plus all of its children. */
@@ -49,9 +51,21 @@ export interface ItemCreate {
   color?: string | null
   cadence_days?: number | null
   next_maintenance_notes?: string | null
+  /** Replaces the whole set. The server lowercases, de-duplicates and creates any new tag. */
+  tags?: string[]
 }
 
 export type ItemPatch = Partial<ItemCreate>
+
+// ============================================================================
+// Tags
+// ============================================================================
+
+/** One row of GET /api/tags: a tag at least one active item uses, most-used first. */
+export interface TagSummary {
+  name: string
+  item_count: number
+}
 
 // ============================================================================
 // Notes
