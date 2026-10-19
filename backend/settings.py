@@ -42,14 +42,14 @@ def load_settings() -> Settings:
             "Copy .env.example to .env and fill it in (see backend/hash_password.py)."
         )
 
-    db_path = os.getenv("GOLDRYN_DB_PATH")
     cookie_secure = os.getenv("GOLDRYN_COOKIE_SECURE", "true").strip().lower() not in _FALSY
-    log_dir = os.getenv("GOLDRYN_LOG_DIR")
 
+    # The DB and log locations are fixed under the repo root. In Docker that's
+    # /app/data and /app/logs, which compose.yaml mounts from the server's data/.
     return Settings(
         username=username,
         password_hash=password_hash.encode(),
-        db_path=Path(db_path) if db_path else DEFAULT_DB_PATH,
+        db_path=DEFAULT_DB_PATH,
         cookie_secure=cookie_secure,
-        log_dir=Path(log_dir) if log_dir else DEFAULT_LOG_DIR,
+        log_dir=DEFAULT_LOG_DIR,
     )

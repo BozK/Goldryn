@@ -32,7 +32,7 @@ Read these before changing behavior. They are the source of truth, and this file
 
 ```
 backend/
-  GoldrynBackend.py   create_app() factory, all routes, static mount of frontend/dist, __main__ → GOLDRYN_HOST:GOLDRYN_PORT (default 127.0.0.1:8000)
+  GoldrynBackend.py   create_app() factory, all routes, static mount of frontend/dist, __main__ → 127.0.0.1:8000 (Docker sets GOLDRYN_HOST=0.0.0.0)
   GoldrynModels.py    Pydantic request/response models (mirror frontend/src/lib/GoldrynModels.tsx)
   db.py               connect(), get_db dependency, init_db() + MIGRATIONS, per-table query helpers
   auth.py             in-memory SessionStore, check_credentials, get_current_user dependency
@@ -50,8 +50,8 @@ frontend/src/
 bruno/                one request per endpoint, runs in order
 dev.sh                build the frontend, then serve everything on :8000
 dev.ps1               same, for PowerShell
-Dockerfile            production image: frontend build stage, then Python 3.14 serving on :8002
-compose.yaml          expects /srv/goldryn/{app,data,.env}; publishes 127.0.0.1:8002 only
+Dockerfile            production image: frontend build stage, then Python 3.14 serving on :8000
+compose.yaml          expects /srv/goldryn/{app,data,.env}; publishes it as 127.0.0.1:8002 only
 run.sh                on the server: docker compose up -d --build
 ```
 

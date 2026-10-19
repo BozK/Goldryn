@@ -176,7 +176,6 @@ def test_load_settings_requires_credentials(monkeypatch):
 def test_load_settings_cookie_secure(monkeypatch, raw, expected):
     monkeypatch.setenv("GOLDRYN_USERNAME", USERNAME)
     monkeypatch.setenv("GOLDRYN_PASSWORD_HASH", "$2b$04$hash")
-    monkeypatch.delenv("GOLDRYN_DB_PATH", raising=False)
     if raw is None:
         monkeypatch.delenv("GOLDRYN_COOKIE_SECURE", raising=False)
     else:

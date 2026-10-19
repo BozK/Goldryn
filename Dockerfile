@@ -11,10 +11,7 @@ FROM python:3.14-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     TZ=America/New_York \
-    GOLDRYN_HOST=0.0.0.0 \
-    GOLDRYN_PORT=8002 \
-    GOLDRYN_DB_PATH=/app/data/goldryn.db \
-    GOLDRYN_LOG_DIR=/app/logs
+    GOLDRYN_HOST=0.0.0.0
 
 # Run as the app's dedicated host user (UID/GID come from APP_UID/APP_GID in .env, see DEPLOY.md)
 ARG UID
@@ -31,5 +28,5 @@ COPY --from=frontend /app/frontend/dist ./frontend/dist
 RUN mkdir -p data logs && chown goldryn:goldryn data logs
 
 USER goldryn
-EXPOSE 8002
+EXPOSE 8000
 CMD ["python", "backend/GoldrynBackend.py"]
