@@ -92,6 +92,7 @@ The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PAS
   - 401: no or expired session. This is checked before body validation.
   - 404: missing or archived.
   - 422: validation failed.
+  - 429: too many login attempts from one IP (`LoginLimiter` in `auth.py`, 5 per 15 minutes, with `Retry-After`).
   - The frontend maps both 400 and 422 to the "Invalid data" toast.
 
 **Frontend**

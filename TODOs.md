@@ -6,12 +6,6 @@
 
 ## Medium Priority
 
-- **Rate limit logins.** The login endpoint is public, and nothing stops repeated guesses. bcrypt slows each attempt but doesn't cap them. Still to decide:
-  - **Where it lives.** A Cloudflare rate-limiting rule needs no code but sits outside the repo. An in-app limiter is testable and versioned. Doing both is also an option.
-  - **What it keys on.** The IP from `CF-Connecting-IP` (already parsed in `logger.py`), a global counter on the one account, or both. A global lockout also locks out the real user, so it probably needs a short window, not a hard lock.
-  - **Response.** 429 with `Retry-After`. `LoginScreen` currently shows "Try again" for anything other than 400/401, so it needs a "Too many attempts, wait N minutes" message.
-  - **State.** In memory, like sessions, so a restart clears it. That's acceptable for a single worker.
-
 ## Low Priority
 
 - **Back up the data.** Today all the data is one SQLite file, `/srv/goldryn/data/db/goldryn.db` on the server. Back it up on a schedule (cron or a systemd timer) with `sqlite3 /srv/goldryn/data/db/goldryn.db ".backup /path/goldryn-$(date +%F).db"`. That's safe while the app is running; a plain `cp` isn't. Write the script to cover all of `data/`: the DB through `.backup`, and a plain copy of everything else. That way attachments (Phase 2) are covered when they land. Prune old copies and keep at least one off the server.

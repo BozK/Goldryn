@@ -20,6 +20,17 @@ export function saveErrorText(status: number): string {
   return 'Error Saving — Try Again'
 }
 
+/** Login-screen toast copy. `retryAfter` is in seconds, from a 429's Retry-After header. */
+export function loginErrorText(status: number, retryAfter?: number): string {
+  if (status === 400 || status === 401) return 'Invalid username or password'
+  if (status === 429) {
+    if (!retryAfter) return 'Too many attempts — wait a few minutes'
+    const minutes = Math.ceil(retryAfter / 60)
+    return `Too many attempts — wait ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`
+  }
+  return 'Try again'
+}
+
 export function isAuthFailure(status: number): boolean {
   return status === 401 || status === 403
 }

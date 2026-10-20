@@ -6,7 +6,7 @@ from fastapi import APIRouter, Cookie, Depends, FastAPI, HTTPException, Path, Re
 from fastapi.staticfiles import StaticFiles
 
 import db
-from auth import SESSION_COOKIE, SESSION_TTL, SessionStore, check_credentials, get_current_user
+from auth import SESSION_COOKIE, SESSION_TTL, LoginLimiter, SessionStore, check_credentials, get_current_user
 from GoldrynModels import (
     Item,
     ItemCreate,
@@ -24,7 +24,7 @@ from GoldrynModels import (
     NotePatch,
     TagSummary,
 )
-from logger import RequestLogMiddleware, configure_logging
+from logger import IP_HEADER, RequestLogMiddleware, configure_logging
 from settings import REPO_ROOT, Settings, load_settings
 
 FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
@@ -44,8 +44,21 @@ auth_router = APIRouter(prefix="/api")
 @auth_router.post("/auth/login", response_model=Me)
 def login(credentials: LoginRequest, request: Request, response: Response):
     settings: Settings = request.app.state.settings
+    limiter: LoginLimiter = request.app.state.login_limiter
+    # Throttled per client IP, checked before bcrypt so a blocked attempt costs nothing.
+    # Requests without the header (local, or tests) share one bucket.
+    client = request.headers.get(IP_HEADER.decode(), "")
+    retry_after = limiter.attempt(client)
+    if retry_after is not None:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts",
+            headers={"Retry-After": str(retry_after)},
+        )
     if not check_credentials(settings, credentials.username, credentials.password):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid username or password")
+
+    limiter.reset(client)
 
     session_id = request.app.state.sessions.create(settings.username)
     response.set_cookie(
@@ -274,6 +287,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Goldryn API", version="1.0.0")
     app.state.settings = settings
     app.state.sessions = SessionStore()
+    app.state.login_limiter = LoginLimiter()
     # One line per /api request; DB lines come from db._select/_write.
     app.add_middleware(RequestLogMiddleware)
 

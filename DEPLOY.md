@@ -81,6 +81,20 @@ goldryn.boz-k.com {
 
 Then run `sudo systemctl reload caddy`, and add the `goldryn` DNS record in Cloudflare, proxied.
 
+### Cloudflare login rate limit
+
+The app limits logins itself (5 attempts per IP per 15 minutes). This rule sits in front of that and drops floods at Cloudflare, so they never cost the server any bcrypt time. In the dashboard, open the `boz-k.com` zone, go to **Security → WAF → Rate limiting rules**, and create:
+
+| Field | Value |
+|---|---|
+| Name | `Goldryn login` |
+| If incoming requests match | Hostname equals `goldryn.boz-k.com` **and** URI Path equals `/api/auth/login` |
+| With the same characteristics | IP (the only option on Free) |
+| When rate exceeds | 5 requests per 10 seconds |
+| Then take action | Block, for 10 seconds |
+
+The Free plan allows one rate limiting rule, and fixes the period and block duration at 10 seconds. That's fine here: the app's own limit is the long one. If another site on the zone ever needs the rule, widen the expression instead of adding a second rule.
+
 ## Updating
 
 ```sh

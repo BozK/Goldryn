@@ -4,15 +4,16 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from auth import SESSION_COOKIE, SessionStore
+from auth import LOGIN_MAX_ATTEMPTS, SESSION_COOKIE, LoginLimiter, SessionStore
 from GoldrynBackend import create_app
 from settings import DEFAULT_DB_PATH, load_settings
 
 from conftest import PASSWORD, USERNAME
 
 
-def login(client, username=USERNAME, password=PASSWORD):
-    return client.post("/api/auth/login", json={"username": username, "password": password})
+def login(client, username=USERNAME, password=PASSWORD, ip=None):
+    headers = {"CF-Connecting-IP": ip} if ip else None
+    return client.post("/api/auth/login", json={"username": username, "password": password}, headers=headers)
 
 
 # ============================================================================
@@ -57,6 +58,55 @@ def test_cookie_is_secure_when_configured(settings):
     secure_app = create_app(replace(settings, cookie_secure=True))
     res = login(TestClient(secure_app))
     assert "Secure" in res.headers["set-cookie"]
+
+
+# ============================================================================
+# Login rate limit
+# ============================================================================
+
+
+def test_too_many_attempts_is_429_with_retry_after(anon):
+    for _ in range(LOGIN_MAX_ATTEMPTS):
+        assert login(anon, password="wrong", ip="203.0.113.7").status_code == 400
+
+    res = login(anon, password="wrong", ip="203.0.113.7")
+    assert res.status_code == 429
+    assert 0 < int(res.headers["retry-after"]) <= 15 * 60
+
+
+def test_blocked_ip_cannot_log_in_even_with_the_right_password(anon):
+    for _ in range(LOGIN_MAX_ATTEMPTS):
+        login(anon, password="wrong", ip="203.0.113.7")
+    res = login(anon, ip="203.0.113.7")
+    assert res.status_code == 429
+    assert SESSION_COOKIE not in res.cookies
+
+
+def test_rate_limit_is_per_ip(anon):
+    for _ in range(LOGIN_MAX_ATTEMPTS):
+        login(anon, password="wrong", ip="203.0.113.7")
+    assert login(anon, ip="198.51.100.2").status_code == 200
+
+
+def test_successful_login_resets_the_count(anon):
+    for _ in range(LOGIN_MAX_ATTEMPTS - 1):
+        login(anon, password="wrong", ip="203.0.113.7")
+    assert login(anon, ip="203.0.113.7").status_code == 200
+
+    for _ in range(LOGIN_MAX_ATTEMPTS - 1):
+        assert login(anon, password="wrong", ip="203.0.113.7").status_code == 400
+
+
+def test_requests_without_ip_header_share_a_bucket(anon):
+    for _ in range(LOGIN_MAX_ATTEMPTS):
+        login(anon, password="wrong")
+    assert login(anon, password="wrong").status_code == 429
+
+
+def test_invalid_body_does_not_use_an_attempt(anon):
+    for _ in range(LOGIN_MAX_ATTEMPTS + 1):
+        assert anon.post("/api/auth/login", json={"username": USERNAME}).status_code == 422
+    assert login(anon).status_code == 200
 
 
 # ============================================================================
@@ -153,6 +203,61 @@ def test_session_ids_are_unique_and_unguessable():
     ids = {store.create(USERNAME) for _ in range(100)}
     assert len(ids) == 100
     assert all(len(sid) >= 40 for sid in ids)
+
+
+# ============================================================================
+# LoginLimiter
+# ============================================================================
+
+
+def test_limiter_allows_max_attempts_then_blocks():
+    limiter = LoginLimiter(max_attempts=3, window=timedelta(minutes=15), clock=FakeClock())
+    assert [limiter.attempt("a") for _ in range(3)] == [None, None, None]
+    assert limiter.attempt("a") == 15 * 60
+
+
+def test_limiter_retry_after_counts_down_to_oldest_attempt_expiring():
+    clock = FakeClock()
+    limiter = LoginLimiter(max_attempts=2, window=timedelta(minutes=15), clock=clock)
+    limiter.attempt("a")
+    clock.now += timedelta(minutes=5)
+    limiter.attempt("a")
+
+    clock.now += timedelta(minutes=9, seconds=30)
+    assert limiter.attempt("a") == 30
+
+    # The oldest attempt has expired, so one more is allowed, and then the second one gates.
+    clock.now += timedelta(seconds=30)
+    assert limiter.attempt("a") is None
+    assert limiter.attempt("a") == 5 * 60
+
+
+def test_limiter_blocked_attempts_do_not_extend_the_block():
+    clock = FakeClock()
+    limiter = LoginLimiter(max_attempts=1, window=timedelta(minutes=15), clock=clock)
+    limiter.attempt("a")
+    for _ in range(10):
+        clock.now += timedelta(minutes=1)
+        limiter.attempt("a")
+    clock.now += timedelta(minutes=5)
+    assert limiter.attempt("a") is None
+
+
+def test_limiter_reset_clears_a_key():
+    limiter = LoginLimiter(max_attempts=1, clock=FakeClock())
+    limiter.attempt("a")
+    limiter.reset("a")
+    assert limiter.attempt("a") is None
+
+
+def test_limiter_forgets_expired_keys():
+    clock = FakeClock()
+    limiter = LoginLimiter(max_attempts=1, window=timedelta(minutes=15), clock=clock)
+    for ip in ("a", "b", "c"):
+        limiter.attempt(ip)
+    clock.now += timedelta(minutes=15)
+    limiter.attempt("d")
+    assert set(limiter._attempts) == {"d"}
 
 
 # ============================================================================

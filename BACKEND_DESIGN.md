@@ -104,6 +104,7 @@ Notes are ordered newest first (`created_at DESC, id DESC`), maintenance records
 | 401 | No session, unknown session, or expired session (checked before the body is validated) |
 | 404 | Missing **or archived** item; missing note/record, or one whose item is archived (including creating one under an archived item) |
 | 422 | Body failed validation (FastAPI's default `{"detail": [...]}`); the frontend shows the same "Invalid data" toast as for 400 |
+| 429 | Too many login attempts from one IP; `Retry-After` gives the wait in seconds |
 
 Validation rules:
 
@@ -137,6 +138,7 @@ Validation rules:
   - Sessions are in memory: `dict[session_id, (username, expires_at)]`, with `session_id = secrets.token_urlsafe(32)`. A server restart invalidates all sessions, which matches the "logged in until restart or 7 days" requirement. The 7-day expiry is also checked server-side, not only via the cookie's `max_age`.
   - Because sessions live in process memory, the server **must run as a single worker**.
   - Logout removes the session named by the caller's own cookie (ClipBackend removed the first session for that username, which logs out the wrong browser once there are two). Logout without a session is a harmless 200.
+  - Login is rate limited per client IP (`LoginLimiter` in `auth.py`): 5 attempts per 15 minutes, then **429** with `Retry-After` until the oldest attempt ages out. The IP comes from `CF-Connecting-IP`; requests without it (local runs, tests) share one bucket. Each attempt is counted before bcrypt runs, so parallel requests can't slip past the check, and a blocked attempt costs no bcrypt time. A successful login clears the IP's count. Counts live in memory, like sessions. There's deliberately no per-account lockout: anyone could trigger it and lock the real user out. A Cloudflare rule in front catches floods before they reach the server (see `DEPLOY.md`).
   - Every `/api` route except login and logout requires a session and returns **401** without one.
   - Cookie `session_id`: `httponly=True, samesite="lax", max_age=604800`, `secure` from `GOLDRYN_COOKIE_SECURE` (default true; set it to false for local development over plain http, or browsers won't send the cookie back).
 
