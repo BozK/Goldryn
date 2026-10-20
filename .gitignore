@@ -25,6 +25,9 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 
+# Uploaded attachments (local runs)
+data/attachments/
+
 # Node/Frontend
 node_modules/
 npm-debug.log

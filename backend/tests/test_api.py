@@ -46,6 +46,11 @@ def create_record(client, item_id, **fields):
         ("POST", "/api/items/1/maintenance_records"),
         ("PATCH", "/api/maintenance_records/1"),
         ("DELETE", "/api/maintenance_records/1"),
+        ("POST", "/api/items/1/attachments"),
+        ("PATCH", "/api/attachments/1"),
+        ("DELETE", "/api/attachments/1"),
+        ("GET", "/api/attachments/1/content"),
+        ("GET", "/api/attachments/1/preview"),
     ],
 )
 def test_routes_require_session(anon, method, path):

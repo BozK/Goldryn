@@ -2,6 +2,7 @@
 // save failure says, and the `mutate` wrapper every POST/PATCH/DELETE goes through.
 
 import { ApiError } from '../api/client'
+import { MAX_UPLOAD_MB } from './attachments'
 
 export type ToastTone = 'success' | 'error'
 
@@ -17,6 +18,7 @@ export const SAVED_TEXT = 'Saved'
 export function saveErrorText(status: number): string {
   if (status === 400 || status === 422) return 'Error Saving — Invalid data'
   if (status === 401 || status === 403) return 'Error Saving — Session Expired, Please Log In'
+  if (status === 413) return `Error Saving — File Too Large (max ${MAX_UPLOAD_MB} MB)`
   return 'Error Saving — Try Again'
 }
 
@@ -48,4 +50,9 @@ export type Mutate = <T>(call: () => Promise<T>) => Promise<T | undefined>
  */
 export function rejectInvalid(reason: string): Promise<never> {
   return Promise.reject(new ApiError(400, reason))
+}
+
+/** Same idea for a file over the upload limit: the "File Too Large" toast, without sending it. */
+export function rejectTooLarge(filename: string): Promise<never> {
+  return Promise.reject(new ApiError(413, `${filename} is over ${MAX_UPLOAD_MB} MB`))
 }

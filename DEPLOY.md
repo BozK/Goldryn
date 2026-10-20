@@ -16,6 +16,7 @@ Goldryn runs on the home server in Docker. It sits next to PredictionGame (`game
 │   └── .env -> ../.env                   <- symlink so compose can read APP_UID/APP_GID
 ├── data/                    owner: goldryn:goldryn, group-writable, setgid
 │   ├── db/                               <- goldryn.db (mounted at /app/data)
+│   ├── attachments/                      <- uploaded files + previews/ (mounted at /app/data/attachments)
 │   └── logs/                             <- Goldryn-YYYY-MM-DD.log (mounted at /app/logs)
 └── .env                     owner: you, mode 600 <- APP_UID/APP_GID, username, password hash, TZ
 ```
@@ -29,7 +30,7 @@ The container runs as a dedicated `goldryn` system user, not as you. If the app 
 ```sh
 # App user + folders
 sudo adduser --system --group --no-create-home goldryn
-sudo mkdir -p /srv/goldryn/data/db /srv/goldryn/data/logs
+sudo mkdir -p /srv/goldryn/data/db /srv/goldryn/data/attachments /srv/goldryn/data/logs
 sudo chown $USER:$USER /srv/goldryn
 sudo chown -R goldryn:goldryn /srv/goldryn/data
 sudo chmod -R g+rwX /srv/goldryn/data
@@ -89,8 +90,19 @@ cd /srv/goldryn/app && git pull && ./run.sh
 
 The old container keeps serving until the new image builds. **The restart logs you out,** because sessions live in memory.
 
+### One-time upgrade: attachments
+
+The release that added attachments mounts a new `data/attachments` folder. Create it before the first `./run.sh` with that code. Otherwise Docker creates it owned by root, and every upload fails.
+
+```sh
+sudo install -d -o goldryn -g goldryn -m 2775 /srv/goldryn/data/attachments
+```
+
+The `attachments` table is created by the app's migrations on start, like the rest of the schema.
+
 ## Notes
 
 - **Keep `127.0.0.1:` in the `ports:` mapping.** Docker-published ports bypass ufw, so a bare `8002:8000` would expose the app to the LAN and the internet.
 - **Client IPs** in the log come from Cloudflare's `CF-Connecting-IP` header, which Caddy passes through. The firewall only lets in Cloudflare's IPs, so the header can't be spoofed by connecting directly.
 - **Logs:** `docker compose logs -f` shows stdout/stderr. The app's own log is in `data/logs/`.
+- **Upload size:** the app caps uploads at 50 MB per file. Cloudflare's free plan allows 100 MB request bodies, and Caddy has no limit by default, so nothing else needs changing.

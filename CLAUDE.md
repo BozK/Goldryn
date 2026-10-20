@@ -1,6 +1,6 @@
 # Goldryn
 
-A single-user home-maintenance tracker. Each **item** (water filter, furnace, gutters) has a color, an optional recurring **cadence** in days, freeform **notes**, and a history of **maintenance records** (date, summary, cost, contractor). The app shows when each item is next due: last maintenance date + cadence.
+A single-user home-maintenance tracker. Each **item** (water filter, furnace, gutters) has a color, an optional recurring **cadence** in days, freeform **notes**, a history of **maintenance records** (date, summary, cost, contractor), and uploaded **attachments** (manuals, receipts, photos). The app shows when each item is next due: last maintenance date + cadence.
 
 One login, no user table. It's self-hosted: FastAPI serves both the API and the built frontend from one process, behind Cloudflare.
 
@@ -16,14 +16,14 @@ Read these before changing behavior. They are the source of truth, and this file
 - `DEPLOY.md`: home-server deployment (Docker, server layout, Caddy).
 - `TODOs.md`: open work by priority.
 
-**Scope.** Phase 1 is what exists now, tags included. Search is deferred to Phase 2.
+**Scope.** Phase 1 is what exists now, tags and attachments included. Search is deferred to Phase 2. The app is desktop-only for now.
 
 ## Stack
 
 | Layer | Tech |
 |---|---|
-| Backend | Python 3.14, FastAPI, Pydantic v2, raw `sqlite3` (no ORM), bcrypt, uvicorn |
-| DB | SQLite file, `data/goldryn.db` by default |
+| Backend | Python 3.14, FastAPI, Pydantic v2, raw `sqlite3` (no ORM), bcrypt, uvicorn, python-multipart, Pillow (previews) |
+| DB | SQLite file, `data/goldryn.db` by default; uploaded files in `data/attachments/` |
 | Frontend | React 19 + TypeScript, Vite, Tailwind v4 (`@tailwindcss/vite`), Motion (`motion/react`, formerly Framer Motion). No router. |
 | Tests | pytest (+ `httpx2` for FastAPI's TestClient), Vitest for `frontend/src/lib` |
 | Manual API testing | Bruno collection in `bruno/` |
@@ -36,6 +36,7 @@ backend/
   GoldrynModels.py    Pydantic request/response models (mirror frontend/src/lib/GoldrynModels.tsx)
   db.py               connect(), get_db dependency, init_db() + MIGRATIONS, per-table query helpers
   auth.py             in-memory SessionStore, check_credentials, get_current_user dependency
+  attachments.py      attachment files on disk: store_upload, kind detection, image previews, unique_filename
   settings.py         env → Settings dataclass
   schema.sql          migration 1 (the full Phase 1 schema)
   hash_password.py    prints a GOLDRYN_PASSWORD_HASH line for .env
@@ -43,8 +44,8 @@ backend/
 frontend/src/
   App.tsx             auth state, view mode (list/panel), toast, the `mutate` wrapper
   api/client.ts       fetch wrapper; throws ApiError(status), status 0 = unreachable
-  lib/                shared types, date helpers, toast copy, tag matching (unit-tested)
-  components/         LoginScreen, LandingPage, ItemCard, ItemPanel, NoteCard, RecordCard, MasonryGrid, EditableField, ColorPicker, TagInput, FeedbackToast
+  lib/                shared types, date helpers, toast copy, tag matching, attachment display helpers (unit-tested)
+  components/         LoginScreen, LandingPage, ItemCard, ItemPanel, NoteCard, RecordCard, AttachmentCard, MasonryGrid, EditableField, ColorPicker, TagInput, FeedbackToast
   useCreateThenUpdate.ts  save-on-blur: first save POSTs, later saves PATCH
   palette.ts          color name → {bg, accent}; unknown/null → Slate
 bruno/                one request per endpoint, runs in order
@@ -85,12 +86,14 @@ The app needs `.env` in the repo root (copy `.env.example`): `GOLDRYN_USERNAME` 
   - `null` for `name`/`body`/`date` is a 422: those fields are typed non-optional with a `None` default.
 - **Writes return the resource.** POST and PATCH return the full resource. The frontend replaces its local copy with the response, so don't return just a message.
 - **Tags.** They're a `tags: string[]` field on items, not their own resource. The server lowercases the names, creates any new tag, and replaces the item's links in one `db.transaction()`. `GET /api/tags` exists only for suggestions. Max 3 per item.
-- **Archiving.** Deleting an item is a soft delete (`archived_at`). Archived items and their notes and records behave as 404 everywhere. Notes and records are hard-deleted.
+- **Archiving.** Deleting an item is a soft delete (`archived_at`). Archived items and their notes, records and attachments behave as 404 everywhere. Notes and records are hard-deleted. Attachments are soft-deleted like items, and their files stay on disk.
+- **Attachments.** They belong to an item only; a note or record mentions a file by name in its text. Files are stored under a random name, and their `kind` (`image`/`pdf`/`text`/`file`) comes from the bytes, never the filename. Only `image`, `pdf` and `text` are served `inline`; everything is served with `nosniff`. The upload route takes the raw `Request` so the session and size checks run before the body is read. `RequestLogMiddleware` never buffers non-JSON bodies, so keep it that way.
 - **`next_due`.** Computed only on the server, by `next_due()` in `GoldrynBackend.py`. The frontend never derives it.
 - **Status codes.**
   - 400: bad login.
   - 401: no or expired session. This is checked before body validation.
   - 404: missing or archived.
+  - 411/413: an upload without `Content-Length`, or over 50 MB. The frontend shows "File Too Large" for 413.
   - 422: validation failed.
   - 429: too many login attempts from one IP (`LoginLimiter` in `auth.py`, 5 per 15 minutes, with `Retry-After`).
   - The frontend maps both 400 and 422 to the "Invalid data" toast.

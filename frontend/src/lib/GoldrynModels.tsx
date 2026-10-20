@@ -44,6 +44,8 @@ export interface Item {
 export interface ItemDetail extends Item {
   notes: Note[]
   maintenance_records: MaintenanceRecord[]
+  /** Active only, newest first. */
+  attachments: Attachment[]
 }
 
 export interface ItemCreate {
@@ -103,6 +105,30 @@ export interface MaintenanceRecordCreate {
 }
 
 export type MaintenanceRecordPatch = Partial<MaintenanceRecordCreate>
+
+// ============================================================================
+// Attachments
+// ============================================================================
+
+/**
+ * Decided by the server from the file's contents. `image`, `pdf` and `text` open in a
+ * new tab (images also have a preview); `file` always downloads.
+ */
+export type AttachmentKind = 'image' | 'pdf' | 'text' | 'file'
+
+/** A file on an item. Uploaded as multipart, so there's no create model. */
+export interface Attachment {
+  id: number
+  filename: string
+  kind: AttachmentKind
+  content_type: string
+  size_bytes: number
+  created_at: string
+}
+
+export interface AttachmentPatch {
+  filename?: string
+}
 
 // ============================================================================
 // Generic

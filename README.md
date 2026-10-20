@@ -19,7 +19,7 @@ docker compose -f compose.dev.yaml run --rm test  # backend tests
 On Windows PowerShell, use `.\dev.ps1` instead of `./dev.sh`. Ctrl+C stops the server.
 
 - **Code changes:** `./dev.sh` rebuilds the image on every start, so restart it to pick up backend or frontend changes. The tests mount `backend/` from the checkout, so they always run the current code without a rebuild.
-- **Data:** `compose.dev.yaml` mounts `data/` and `logs/` from the repo. The SQLite file is created at `data/goldryn.db` on first start.
+- **Data:** `compose.dev.yaml` mounts `data/` and `logs/` from the repo. The SQLite file is created at `data/goldryn.db` on first start, and uploaded attachments go in `data/attachments/`.
 - **Cookies:** `compose.dev.yaml` sets `GOLDRYN_COOKIE_SECURE=false`, because local is plain http.
 - **Sessions** live in memory, so the app runs as a single worker, and restarting it logs you out.
 

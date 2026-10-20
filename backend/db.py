@@ -50,6 +50,25 @@ def get_db(request: Request) -> Iterator[sqlite3.Connection]:
 # steps to the end; never edit one that has already shipped.
 MIGRATIONS: list[str] = [
     SCHEMA_PATH.read_text(encoding="utf-8"),
+    # 2: file attachments. The bytes live on disk under Settings.attachments_dir,
+    # named by stored_name; filename is only for display and downloads.
+    # AUTOINCREMENT so a deleted id is never reused: previews are cached by id.
+    # kind is decided from the file's contents at upload: 'image' (decoded by
+    # Pillow, has a preview), 'pdf', 'text', or 'file' (download only).
+    """
+    CREATE TABLE attachments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        stored_name TEXT NOT NULL UNIQUE,
+        filename TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('image', 'pdf', 'text', 'file')),
+        content_type TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        archived_at TEXT
+    );
+    CREATE INDEX attachments_item_id ON attachments(item_id);
+    """,
 ]
 
 
@@ -132,13 +151,14 @@ def transaction(conn: sqlite3.Connection) -> Iterator[None]:
 #
 # Writes commit immediately (via _write). Column names in dynamic SET/INSERT
 # clauses come from the *_FIELDS whitelists below, never from the request.
-# Children of an archived item are treated as missing: every note/record query
-# joins through ACTIVE_ITEM_IDS.
+# Children of an archived item are treated as missing: every note/record/attachment
+# query joins through ACTIVE_ITEM_IDS.
 # ============================================================================
 
 ITEM_FIELDS = ("name", "color", "cadence_days", "next_maintenance_notes")
 NOTE_FIELDS = ("body",)
 RECORD_FIELDS = ("date", "summary", "cost", "contractor_info")
+ATTACHMENT_FIELDS = ("stored_name", "filename", "kind", "content_type", "size_bytes")
 
 ACTIVE_ITEM_IDS = "SELECT id FROM items WHERE archived_at IS NULL"
 
@@ -337,3 +357,63 @@ def update_record(conn: sqlite3.Connection, record_id: int, fields: dict) -> boo
 
 def delete_record(conn: sqlite3.Connection, record_id: int) -> bool:
     return _delete_child(conn, "maintenance_records", record_id)
+
+
+# -------- Attachments --------
+#
+# Soft-deleted like items: archived_at hides the row, and the file stays on disk.
+
+_ATTACHMENT_COLUMNS = "id, filename, kind, content_type, size_bytes, created_at"
+_ACTIVE_ATTACHMENT = f"archived_at IS NULL AND item_id IN ({ACTIVE_ITEM_IDS})"
+
+
+def list_attachments(conn: sqlite3.Connection, item_id: int) -> list[sqlite3.Row]:
+    return _select(
+        conn,
+        f"SELECT {_ATTACHMENT_COLUMNS} FROM attachments WHERE item_id = ? AND archived_at IS NULL "
+        "ORDER BY created_at DESC, id DESC",
+        (item_id,),
+    )
+
+
+def get_attachment(conn: sqlite3.Connection, attachment_id: int) -> sqlite3.Row | None:
+    """An active attachment of an active item, with stored_name for serving the file."""
+    return _select_one(
+        conn,
+        f"SELECT {_ATTACHMENT_COLUMNS}, item_id, stored_name FROM attachments WHERE id = ? AND {_ACTIVE_ATTACHMENT}",
+        (attachment_id,),
+    )
+
+
+def attachment_filenames(conn: sqlite3.Connection, item_id: int, excluding_id: int | None = None) -> set[str]:
+    """The item's active filenames, for keeping names unique within an item."""
+    rows = _select(
+        conn,
+        "SELECT filename FROM attachments WHERE item_id = ? AND archived_at IS NULL AND id IS NOT ?",
+        (item_id, excluding_id),
+    )
+    return {row["filename"] for row in rows}
+
+
+def insert_attachment(conn: sqlite3.Connection, item_id: int, fields: dict) -> int | None:
+    """Returns the new id, or None if the item is missing or archived."""
+    return _insert_child(conn, "attachments", ATTACHMENT_FIELDS, item_id, fields)
+
+
+def rename_attachment(conn: sqlite3.Connection, attachment_id: int, filename: str) -> bool:
+    cursor = _write(
+        conn,
+        f"UPDATE attachments SET filename = ? WHERE id = ? AND {_ACTIVE_ATTACHMENT}",
+        (filename, attachment_id),
+    )
+    return cursor.rowcount == 1
+
+
+def archive_attachment(conn: sqlite3.Connection, attachment_id: int) -> bool:
+    """Soft delete. The file and its preview stay on disk."""
+    cursor = _write(
+        conn,
+        f"UPDATE attachments SET archived_at = {NOW_SQL} WHERE id = ? AND {_ACTIVE_ATTACHMENT}",
+        (attachment_id,),
+    )
+    return cursor.rowcount == 1

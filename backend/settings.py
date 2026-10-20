@@ -4,6 +4,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = REPO_ROOT / "data" / "goldryn.db"
+DEFAULT_ATTACHMENTS_DIR = REPO_ROOT / "data" / "attachments"
 DEFAULT_LOG_DIR = REPO_ROOT / "logs"
 
 _FALSY = {"0", "false", "no", "off"}
@@ -20,6 +21,8 @@ class Settings:
     # No default on purpose: anything building Settings by hand (the tests) must
     # choose where logs go, so it can't write into the repo's logs/ by accident.
     log_dir: Path
+    # Uploaded files and their previews. No default, for the same reason as log_dir.
+    attachments_dir: Path
 
 
 def load_settings() -> Settings:
@@ -44,12 +47,14 @@ def load_settings() -> Settings:
 
     cookie_secure = os.getenv("GOLDRYN_COOKIE_SECURE", "true").strip().lower() not in _FALSY
 
-    # The DB and log locations are fixed under the repo root. In Docker that's
-    # /app/data and /app/logs, which compose.yaml mounts from the server's data/.
+    # The DB, attachment and log locations are fixed under the repo root. In Docker
+    # that's /app/data, /app/data/attachments and /app/logs, which compose.yaml
+    # mounts from the server's data/.
     return Settings(
         username=username,
         password_hash=password_hash.encode(),
         db_path=DEFAULT_DB_PATH,
         cookie_secure=cookie_secure,
         log_dir=DEFAULT_LOG_DIR,
+        attachments_dir=DEFAULT_ATTACHMENTS_DIR,
     )

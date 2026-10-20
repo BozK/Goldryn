@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { DragEvent as ReactDragEvent, ReactNode } from 'react'
 import { motion } from 'motion/react'
-import type { Item, ItemDetail, ItemPatch, MaintenanceRecord, Note, TagSummary } from '../lib/GoldrynModels'
+import type { Attachment, Item, ItemDetail, ItemPatch, MaintenanceRecord, Note, TagSummary } from '../lib/GoldrynModels'
 import { api, ApiError } from '../api/client'
+import { hasFiles, MAX_UPLOAD_BYTES } from '../lib/attachments'
 import { formatDay, formatTimestamp } from '../lib/dates'
-import { isAuthFailure, rejectInvalid } from '../lib/feedback'
+import { isAuthFailure, rejectInvalid, rejectTooLarge } from '../lib/feedback'
 import type { Mutate } from '../lib/feedback'
 import { resolveColor } from '../palette'
 import { blankToNull, parseCadence } from '../parse'
 import { useCreateThenUpdate } from '../useCreateThenUpdate'
+import { AttachmentCard, UploadingCard } from './AttachmentCard'
 import { ColorPicker } from './ColorPicker'
 import { EditableField } from './EditableField'
 import { MasonryGrid } from './MasonryGrid'
@@ -89,11 +91,23 @@ export function ItemPanel({
       onClose()
     }
 
+    // A file dropped beside the panel would otherwise make the browser navigate to
+    // it, losing the page. Drops on the panel itself never get this far.
+    const refuseStrayDrop = (event: DragEvent) => {
+      if (!hasFiles(event.dataTransfer)) return
+      event.preventDefault()
+      if (event.dataTransfer && event.type === 'dragover') event.dataTransfer.dropEffect = 'none'
+    }
+
     document.addEventListener('keydown', handleKeyDown)
     document.addEventListener('click', handleClick)
+    window.addEventListener('dragover', refuseStrayDrop)
+    window.addEventListener('drop', refuseStrayDrop)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       document.removeEventListener('click', handleClick)
+      window.removeEventListener('dragover', refuseStrayDrop)
+      window.removeEventListener('drop', refuseStrayDrop)
     }
   }, [onClose])
 
@@ -143,7 +157,17 @@ interface Entry<T> {
 let draftCounter = 0
 const draftKey = () => `draft-${++draftCounter}`
 
-function toItem({ notes: _notes, maintenance_records: _records, ...item }: ItemDetail): Item {
+interface Upload {
+  key: string
+  filename: string
+}
+
+function toItem({
+  notes: _notes,
+  maintenance_records: _records,
+  attachments: _attachments,
+  ...item
+}: ItemDetail): Item {
   return item
 }
 
@@ -184,6 +208,10 @@ function ItemPanelContent({ initial, tagSuggestions, mutate, onCreated, onArchiv
 
   const [notes, setNotes] = useState(() => noteEntries(initial?.notes ?? []))
   const [records, setRecords] = useState(() => recordEntries(initial?.maintenance_records ?? []))
+  const [attachments, setAttachments] = useState<Attachment[]>(initial?.attachments ?? [])
+  const [uploads, setUploads] = useState<Upload[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Record changes can move next_due, which only the server computes.
   const refreshHeader = async () => {
@@ -211,13 +239,66 @@ function ItemPanelContent({ initial, tagSuggestions, mutate, onCreated, onArchiv
 
   const saveTags = async (tags: string[]) => (await header.save({ tags })) !== undefined
 
+  // One request per file, in order. Each gets its own toast, like any other save.
+  const uploadFiles = async (files: File[]) => {
+    if (!item) return
+    for (const file of files) {
+      if (file.size > MAX_UPLOAD_BYTES) {
+        await mutate(() => rejectTooLarge(file.name))
+        continue
+      }
+      const upload = { key: draftKey(), filename: file.name }
+      setUploads((current) => [...current, upload])
+      const created = await mutate(() => api.uploadAttachment(item.id, file))
+      setUploads((current) => current.filter((u) => u.key !== upload.key))
+      if (created) setAttachments((current) => [created, ...current])
+    }
+  }
+
+  // The whole panel is the drop zone. dragleave also fires when moving between the
+  // panel's own children, so only leaving the panel itself ends the drag.
+  const dropZone = {
+    onDragEnter: (event: ReactDragEvent<HTMLDivElement>) => {
+      if (!hasFiles(event.dataTransfer)) return
+      event.preventDefault()
+      setIsDragging(true)
+    },
+    onDragOver: (event: ReactDragEvent<HTMLDivElement>) => {
+      if (!hasFiles(event.dataTransfer)) return
+      event.preventDefault()
+      event.stopPropagation() // keeps the window's stray-drop guard from refusing it
+      event.dataTransfer.dropEffect = isNew ? 'none' : 'copy'
+    },
+    onDragLeave: (event: ReactDragEvent<HTMLDivElement>) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDragging(false)
+    },
+    onDrop: (event: ReactDragEvent<HTMLDivElement>) => {
+      if (!hasFiles(event.dataTransfer)) return
+      event.preventDefault()
+      event.stopPropagation()
+      setIsDragging(false)
+      void uploadFiles([...event.dataTransfer.files])
+    },
+  }
+
   const archive = async () => {
     if (!item || !window.confirm(`Archive "${item.name}"? It will disappear from the list.`)) return
     if (await mutate(() => api.deleteItem(item.id))) onArchived()
   }
 
   return (
-    <>
+    <div className="relative min-h-full" {...dropZone}>
+      {isDragging && (
+        // Zero-height and sticky, so the overlay covers whatever part of the panel is scrolled into view.
+        <div className="pointer-events-none sticky top-0 z-20 h-0">
+          <div className="absolute inset-x-0 top-0 h-screen bg-black/60 p-6">
+            <div className="flex size-full items-center justify-center rounded-xl border-2 border-dashed border-gold text-lg font-semibold">
+              {isNew ? 'Name the item first' : 'Drop to attach'}
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="space-y-4 px-8 pt-8 pb-6" style={{ backgroundColor: bg }}>
         <div className="pr-12">
           <EditableField
@@ -316,18 +397,58 @@ function ItemPanelContent({ initial, tagSuggestions, mutate, onCreated, onArchiv
             />
           ))}
       </PanelSection>
-    </>
+
+      <PanelSection
+        title="Attachments"
+        addLabel="+ Attach File"
+        canAdd={!isNew}
+        onAdd={() => fileInputRef.current?.click()}
+        hint={
+          item && attachments.length === 0 && uploads.length === 0
+            ? 'Drop files anywhere on this panel, or use + Attach File.'
+            : undefined
+        }
+      >
+        {uploads.map((upload) => (
+          <UploadingCard key={upload.key} filename={upload.filename} accent={accent} />
+        ))}
+        {attachments.map((attachment) => (
+          <AttachmentCard
+            key={attachment.id}
+            attachment={attachment}
+            accent={accent}
+            mutate={mutate}
+            onChange={(next) => setAttachments((current) => current.map((a) => (a.id === next.id ? next : a)))}
+            onRemove={() => setAttachments((current) => current.filter((a) => a.id !== attachment.id))}
+          />
+        ))}
+      </PanelSection>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        hidden
+        onChange={(event) => {
+          const files = [...(event.target.files ?? [])]
+          event.target.value = '' // so picking the same file again still fires onChange
+          void uploadFiles(files)
+        }}
+      />
+    </div>
   )
 }
 
 interface PanelSectionProps {
   title: string
+  addLabel?: string
   canAdd: boolean
   onAdd: () => void
+  /** Shown under the title, e.g. while the section is empty. */
+  hint?: string
   children: ReactNode
 }
 
-function PanelSection({ title, canAdd, onAdd, children }: PanelSectionProps) {
+function PanelSection({ title, addLabel = '+ Add New', canAdd, onAdd, hint, children }: PanelSectionProps) {
   return (
     <section className="px-8 py-6">
       <div className="mb-3 flex items-center justify-between">
@@ -339,9 +460,10 @@ function PanelSection({ title, canAdd, onAdd, children }: PanelSectionProps) {
           title={canAdd ? undefined : 'Name the item first'}
           className="rounded-md px-2 py-1 text-sm text-gold hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
         >
-          + Add New
+          {addLabel}
         </button>
       </div>
+      {hint && <p className="text-sm text-white/45">{hint}</p>}
       <MasonryGrid>{children}</MasonryGrid>
     </section>
   )

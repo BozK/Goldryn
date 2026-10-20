@@ -59,8 +59,11 @@ Shared layout, top to bottom:
 1. **Header block** — `name` (large), `color` (palette picker), `cadence_days`, `next_maintenance_notes`, `tags` (up to 3 chips plus a type-ahead input, see `TAGS_PHASE1.md`), and (existing items only) `created_at`. All click-to-edit.
 2. **Notes section** — 2-column masonry (`MasonryGrid`: each card goes under whichever column ends first, so a short card next to a tall one leaves no gap), `+ Add New` control, sorted newest-first. Each note is a styled click-to-edit text wrapper (Keep-style), not a raw `<textarea>`.
 3. **Maintenance records section** — same 2-column masonry, `+ Add New`, sorted newest-first by `date`. Each record is its own rounded-rectangle card with three independently click-to-edit fields: `summary`, `cost`, `contractor_info`.
+4. **Attachments section** — same 2-column masonry, `+ Attach File` (opens the file picker), newest first. Each file is an `AttachmentCard` in the same clipped shape: images show their preview across the top of the card; other files show a type badge (`PDF`, `DOCX`…). The filename is click-to-edit (a rename). The preview, the badge and the `Open ↗`/`Download` link open the file: images, PDFs and text in a new tab, anything else as a download. The hover `×` archives it after a confirm. While the section is empty, a hint says files can be dropped on the panel.
 
-In "new" mode, the Notes and Maintenance Records sections' `+ Add New` controls are disabled/hidden until the header block's first field save succeeds and `selectedItemId` is populated — `notes.item_id` and `maintenance_records.item_id` are `NOT NULL` FKs, so there's nothing to attach a note or record to before the item exists.
+In "new" mode, the Notes, Maintenance Records and Attachments sections' add controls are disabled until the header block's first field save succeeds and `selectedItemId` is populated — `item_id` is a `NOT NULL` FK on all three, so there's nothing to attach them to before the item exists.
+
+**Uploading:** dropping files anywhere on the panel, or picking several in the file picker, uploads them one request at a time, in order. Each one gets its own toast through `mutate`. While a file uploads, a pulsing "Uploading …" card stands in for it. A file over 50 MB gets the "File Too Large" toast without being sent. While files are dragged over the panel, an overlay says "Drop to attach" ("Name the item first" in new mode). A file dropped outside the panel is ignored, instead of the browser navigating to it.
 
 **Save model:** every editable field saves independently on blur — no submit button anywhere in this panel.
 
@@ -69,6 +72,7 @@ In "new" mode, the Notes and Maintenance Records sections' `+ Add New` controls 
 - Tag added (Enter, a picked suggestion, or blur with text in the input) or removed (its ×) → `PATCH /api/items/{id}` with the item's full tag list. Tags can't be added until the item exists.
 - New/edited note blur → `POST /api/items/{id}/notes` or `PATCH /api/notes/{id}`
 - New/edited maintenance record field blur → `POST /api/items/{id}/maintenance_records` or `PATCH /api/maintenance_records/{id}`
+- Attachment filename blur → `PATCH /api/attachments/{id}` (uploads aren't save-on-blur; see **Uploading** above)
 
 **Closing the panel:** an `X` in the top-right, click-outside, or `Escape`. All three close paths need any in-flight edit saved first:
 
@@ -85,6 +89,7 @@ In "new" mode, the Notes and Maintenance Records sections' `+ Add New` controls 
   - Success → "Saved"
   - 400 → "Error Saving — Invalid data"
   - 401/403 → "Error Saving — Session Expired, Please Log In"
+  - 413 → "Error Saving — File Too Large (max 50 MB)"
   - 5xx → "Error Saving — Try Again"
 - Dumb by design: no retry queue, no held form state on error.
 

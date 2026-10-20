@@ -156,15 +156,30 @@ def _is_api(path: str) -> bool:
     return path == "/api" or path.startswith("/api/")
 
 
+def _is_json(content_type: bytes | None) -> bool:
+    """A JSON Content-Type. A body with none counts too, since FastAPI parses it as JSON."""
+    media_type = (content_type or b"").split(b";")[0].strip().lower()
+    return media_type in (b"", b"application/json")
+
+
+def _size_field(size: int | None) -> str:
+    """Stands in for a body that isn't JSON (a file upload or download). Never the bytes."""
+    if size is None:
+        return "<not JSON>"
+    return f"<{size} bytes, not JSON>" if size else EMPTY
+
+
 class RequestLogMiddleware:
     """
     Pure ASGI middleware: one API line per /api/* request. Everything else
     (/health, the static frontend) passes straight through unlogged.
 
-    The request body is read up front and replayed to the app, so it's logged
+    A JSON request body is read up front and replayed to the app, so it's logged
     even when the route never reads it (a 401 is decided before the body is
-    parsed). Response body chunks are copied as they go by; the client gets
-    them unchanged.
+    parsed). Any other body (a file upload) streams straight through and only its
+    Content-Length is logged, so it's never held in memory here. Likewise, JSON
+    response chunks are copied as they go by, while other responses (file
+    downloads) are only counted. The client gets them unchanged.
     """
 
     def __init__(self, app):
@@ -176,47 +191,64 @@ class RequestLogMiddleware:
             return
 
         start = time.perf_counter()
-        ip = one_line(dict(scope["headers"]).get(IP_HEADER, b"").decode("latin-1"))
+        headers = dict(scope["headers"])
+        ip = one_line(headers.get(IP_HEADER, b"").decode("latin-1"))
         token = client_ip.set(ip or None)
 
-        chunks: list[bytes] = []
-        pending: list[dict] = []
-        while True:
-            message = await receive()
-            if message["type"] != "http.request":  # e.g. http.disconnect: hand it on after the body
-                pending.append(message)
-                break
-            chunks.append(message.get("body", b""))
-            if not message.get("more_body", False):
-                break
-        request_body = b"".join(chunks)
-        pending.insert(0, {"type": "http.request", "body": request_body, "more_body": False})
+        if _is_json(headers.get(b"content-type")):
+            chunks: list[bytes] = []
+            pending: list[dict] = []
+            while True:
+                message = await receive()
+                if message["type"] != "http.request":  # e.g. http.disconnect: hand it on after the body
+                    pending.append(message)
+                    break
+                chunks.append(message.get("body", b""))
+                if not message.get("more_body", False):
+                    break
+            request_body = b"".join(chunks)
+            pending.insert(0, {"type": "http.request", "body": request_body, "more_body": False})
+            request_field = body_field(request_body)
 
-        async def replay():
-            return pending.pop(0) if pending else await receive()
+            async def app_receive():
+                return pending.pop(0) if pending else await receive()
+
+        else:
+            content_length = headers.get(b"content-length", b"")
+            request_field = _size_field(int(content_length) if content_length.isdigit() else None)
+            app_receive = receive
 
         # If the app raises before responding, ServerErrorMiddleware (outside us) sends a 500.
         status = 500
+        response_is_json = True
         response_chunks: list[bytes] = []
+        response_size = 0
 
         async def capture(message):
-            nonlocal status
+            nonlocal status, response_is_json, response_size
             if message["type"] == "http.response.start":
                 status = message["status"]
+                response_is_json = _is_json(dict(message.get("headers", [])).get(b"content-type"))
             elif message["type"] == "http.response.body":
-                response_chunks.append(message.get("body", b""))
+                body = message.get("body", b"")
+                response_size += len(body)
+                if response_is_json:
+                    response_chunks.append(body)
             await send(message)
 
         try:
-            await self.app(scope, replay, capture)
+            await self.app(scope, app_receive, capture)
         finally:
             if log.isEnabledFor(logging.INFO):
+                response_field = (
+                    body_field(b"".join(response_chunks)) if response_is_json else _size_field(response_size)
+                )
                 _emit(
                     "API",
                     str(status),
                     one_line(f"{scope['method']} {scope['path']}"),
-                    body_field(request_body),
-                    body_field(b"".join(response_chunks)),
+                    request_field,
+                    response_field,
                     (time.perf_counter() - start) * 1000,
                 )
             client_ip.reset(token)

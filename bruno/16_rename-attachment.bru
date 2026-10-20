@@ -1,0 +1,21 @@
+meta {
+  name: Rename Attachment
+  type: http
+  seq: 16
+}
+
+patch {
+  url: {{base_url}}/api/attachments/{{attachmentId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "filename": "collection.json"
+  }
+}
