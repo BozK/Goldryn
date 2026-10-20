@@ -33,8 +33,13 @@ export function NoteCard({ itemId, initial, accent, mutate, onRemove }: NoteCard
     if (await mutate(() => api.deleteNote(saved.id))) onRemove()
   }
 
+  // EditableField's box bleeds 0.5rem left and right but not vertically, so the top padding is
+  // 0.5rem less than the left: an open field then sits evenly inset. The × is centered on the first field.
   return (
-    <div className="group relative clip-corners clip-cut-4 p-3 pr-8" style={{ backgroundColor: accent }}>
+    <div
+      className="group relative clip-corners clip-cut-4 pt-2.5 pr-12 pb-4 pl-4.5"
+      style={{ backgroundColor: accent }}
+    >
       <EditableField
         value={saved?.body ?? ''}
         onCommit={(body) => void note.save({ body })}
@@ -50,7 +55,7 @@ export function NoteCard({ itemId, initial, accent, mutate, onRemove }: NoteCard
         onClick={handleDelete}
         aria-label="Delete note"
         title="Delete note"
-        className="absolute top-2 right-2 rounded px-1.5 text-white/60 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/20 hover:text-white focus:opacity-100"
+        className="absolute top-3.5 right-2.5 flex size-6 items-center justify-center rounded text-white/60 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/20 hover:text-white focus:opacity-100"
       >
         ×
       </button>

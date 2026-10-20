@@ -44,7 +44,7 @@ frontend/src/
   App.tsx             auth state, view mode (list/panel), toast, the `mutate` wrapper
   api/client.ts       fetch wrapper; throws ApiError(status), status 0 = unreachable
   lib/                shared types, date helpers, toast copy, tag matching (unit-tested)
-  components/         LoginScreen, LandingPage, ItemCard, ItemPanel, NoteCard, RecordCard, EditableField, ColorPicker, TagInput, FeedbackToast
+  components/         LoginScreen, LandingPage, ItemCard, ItemPanel, NoteCard, RecordCard, MasonryGrid, EditableField, ColorPicker, TagInput, FeedbackToast
   useCreateThenUpdate.ts  save-on-blur: first save POSTs, later saves PATCH
   palette.ts          color name → {bg, accent}; unknown/null → Slate
 bruno/                one request per endpoint, runs in order

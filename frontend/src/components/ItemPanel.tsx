@@ -11,6 +11,7 @@ import { blankToNull, parseCadence } from '../parse'
 import { useCreateThenUpdate } from '../useCreateThenUpdate'
 import { ColorPicker } from './ColorPicker'
 import { EditableField } from './EditableField'
+import { MasonryGrid } from './MasonryGrid'
 import { NoteCard } from './NoteCard'
 import { RecordCard } from './RecordCard'
 import { TagInput } from './TagInput'
@@ -341,7 +342,7 @@ function PanelSection({ title, canAdd, onAdd, children }: PanelSectionProps) {
           + Add New
         </button>
       </div>
-      <div className="grid grid-cols-2 items-start gap-3">{children}</div>
+      <MasonryGrid>{children}</MasonryGrid>
     </section>
   )
 }
