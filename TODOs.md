@@ -2,8 +2,6 @@
 
 ## High Priority / Features
 
-- **Deploy to the home server.** The Docker setup removes the Python 3.14 problem: the image brings its own Python. Steps are in `DEPLOY.md`.
-
 ## Medium Priority
 
 ## Low Priority
