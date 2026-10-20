@@ -57,8 +57,8 @@ First save in "new" mode fires `POST /api/items`; the response's `id` is written
 Shared layout, top to bottom:
 
 1. **Header block** — `name` (large), `color` (palette picker), `cadence_days`, `next_maintenance_notes`, `tags` (up to 3 chips plus a type-ahead input, see `TAGS_PHASE1.md`), and (existing items only) `created_at`. All click-to-edit.
-2. **Notes section** — fixed 2-column layout, `+ Add New` control, sorted newest-first. Each note is a styled click-to-edit text wrapper (Keep-style), not a raw `<textarea>`.
-3. **Maintenance records section** — same 2-column layout, `+ Add New`, sorted newest-first by `date`. Each record is its own rounded-rectangle card with three independently click-to-edit fields: `summary`, `cost`, `contractor_info`.
+2. **Notes section** — 2-column masonry (`MasonryGrid`: each card goes under whichever column ends first, so a short card next to a tall one leaves no gap), `+ Add New` control, sorted newest-first. Each note is a styled click-to-edit text wrapper (Keep-style), not a raw `<textarea>`.
+3. **Maintenance records section** — same 2-column masonry, `+ Add New`, sorted newest-first by `date`. Each record is its own rounded-rectangle card with three independently click-to-edit fields: `summary`, `cost`, `contractor_info`.
 
 In "new" mode, the Notes and Maintenance Records sections' `+ Add New` controls are disabled/hidden until the header block's first field save succeeds and `selectedItemId` is populated — `notes.item_id` and `maintenance_records.item_id` are `NOT NULL` FKs, so there's nothing to attach a note or record to before the item exists.
 

@@ -61,8 +61,13 @@ export function RecordCard({ itemId, initial, accent, mutate, onSaved, onRemove 
     }
   }
 
+  // EditableField's box bleeds 0.5rem left and right but not vertically, so the top padding is
+  // 0.5rem less than the left: an open field then sits evenly inset. The × is centered on the first field.
   return (
-    <div className="group relative clip-corners clip-cut-4 space-y-1 p-4 pr-9" style={{ backgroundColor: accent }}>
+    <div
+      className="group relative clip-corners clip-cut-4 space-y-1 py-2.5 pr-12 pl-4.5"
+      style={{ backgroundColor: accent }}
+    >
       <EditableField
         value={saved?.date ?? draftDate}
         onCommit={(date) => void save({ date })}
@@ -102,7 +107,7 @@ export function RecordCard({ itemId, initial, accent, mutate, onSaved, onRemove 
         onClick={handleDelete}
         aria-label="Delete maintenance record"
         title="Delete maintenance record"
-        className="absolute top-2 right-2 rounded px-1.5 text-white/60 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/20 hover:text-white focus:opacity-100"
+        className="absolute top-3 right-2.5 flex size-6 items-center justify-center rounded text-white/60 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/20 hover:text-white focus:opacity-100"
       >
         ×
       </button>
