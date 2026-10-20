@@ -20,6 +20,8 @@ services:
       - "127.0.0.1:8002:8000"
     volumes:
       - ../data/db:/app/data
+      # Nested in /app/data so the app finds it at data/attachments, but kept in its own folder on the host.
+      - ../data/attachments:/app/data/attachments
       - ../data/logs:/app/logs
     logging:
       driver: json-file

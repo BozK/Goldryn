@@ -18,7 +18,8 @@ def db_path(tmp_path):
 def test_init_db_creates_schema_and_sets_version(db_path):
     conn = connect(db_path)
     tables = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    assert tables == {"items", "notes", "maintenance_records", "tags", "item_tags"}
+    # sqlite_sequence is SQLite's own, created for attachments' AUTOINCREMENT.
+    assert tables == {"items", "notes", "maintenance_records", "tags", "item_tags", "attachments", "sqlite_sequence"}
     assert conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
 
 

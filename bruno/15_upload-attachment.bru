@@ -1,0 +1,19 @@
+meta {
+  name: Upload Attachment
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{base_url}}/api/items/{{itemId}}/attachments
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  file: @file(bruno.json)
+}
+
+vars:post-response {
+  attachmentId: res.body.id
+}

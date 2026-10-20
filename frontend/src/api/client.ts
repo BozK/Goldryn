@@ -1,4 +1,6 @@
 import type {
+  Attachment,
+  AttachmentPatch,
   Item,
   ItemCreate,
   ItemDetail,
@@ -35,14 +37,16 @@ export class ApiError extends Error {
 
 type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE'
 
+/** `body` is sent as JSON, except FormData, which the browser encodes as multipart itself. */
 async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
+  const isJson = body !== undefined && !(body instanceof FormData)
   let response: Response
   try {
     response = await fetch(path, {
       method,
       credentials: 'same-origin',
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: isJson ? { 'Content-Type': 'application/json' } : undefined,
+      body: isJson ? JSON.stringify(body) : (body as FormData | undefined),
     })
   } catch {
     throw new ApiError(0, 'Unable to reach the server')
@@ -87,4 +91,21 @@ export const api = {
   updateRecord: (id: number, patch: MaintenanceRecordPatch) =>
     request<MaintenanceRecord>('PATCH', `/api/maintenance_records/${id}`, patch),
   deleteRecord: (id: number) => request<MessageResponse>('DELETE', `/api/maintenance_records/${id}`),
+
+  // -------- Attachments --------
+  uploadAttachment: (itemId: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<Attachment>('POST', `/api/items/${itemId}/attachments`, form)
+  },
+  updateAttachment: (id: number, patch: AttachmentPatch) =>
+    request<Attachment>('PATCH', `/api/attachments/${id}`, patch),
+  /** Archives it: the server keeps the file but stops listing or serving it. */
+  deleteAttachment: (id: number) => request<MessageResponse>('DELETE', `/api/attachments/${id}`),
+}
+
+/** Plain URLs for links and <img>, not fetched through `request`. */
+export const attachmentUrls = {
+  content: (id: number) => `/api/attachments/${id}/content`,
+  preview: (id: number) => `/api/attachments/${id}/preview`,
 }

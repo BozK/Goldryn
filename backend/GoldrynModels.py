@@ -9,7 +9,7 @@ Nullable columns are `X | None = None`, so null clears them.
 
 import re
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints
 
@@ -183,6 +183,43 @@ class MaintenanceRecord(BaseModel):
 
 
 # ============================================================================
+# Attachments
+#
+# Uploaded as multipart (POST /api/items/{id}/attachments), so there's no create model.
+# ============================================================================
+
+AttachmentKind = Literal["image", "pdf", "text", "file"]
+
+
+def clean_filename(value: object) -> object:
+    """
+    A display name that's safe in a Content-Disposition header: no directory part,
+    no control characters, whitespace collapsed. Used for uploads and renames.
+    """
+    if not isinstance(value, str):
+        return value
+    name = re.split(r"[\\/]", value)[-1]
+    name = "".join(char for char in name if char.isprintable())
+    return " ".join(name.split())
+
+
+Filename = Annotated[str, BeforeValidator(clean_filename), StringConstraints(min_length=1, max_length=255)]
+
+
+class AttachmentPatch(RequestModel):
+    filename: Filename = None  # omit to keep; null is rejected
+
+
+class Attachment(BaseModel):
+    id: int
+    filename: str
+    kind: AttachmentKind
+    content_type: str
+    size_bytes: int
+    created_at: str
+
+
+# ============================================================================
 # Item detail
 # ============================================================================
 
@@ -192,6 +229,7 @@ class ItemDetail(Item):
 
     notes: list[Note]
     maintenance_records: list[MaintenanceRecord]
+    attachments: list[Attachment]  # active only, newest first
 
 
 # ============================================================================

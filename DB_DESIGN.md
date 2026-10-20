@@ -2,7 +2,7 @@
 
 **Engine:** SQLite
 
-The schema below lives in `backend/schema.sql` and is applied by `init_db()` in `backend/db.py`.
+Migration 1 (everything below except `attachments`) lives in `backend/schema.sql`. Migration 2 (`attachments`) is a string in `db.MIGRATIONS`. `init_db()` in `backend/db.py` applies both.
 
 ## Schema
 
@@ -43,6 +43,20 @@ CREATE TABLE item_tags (
     tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     PRIMARY KEY (item_id, tag_id)
 );
+
+-- Migration 2
+CREATE TABLE attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    stored_name TEXT NOT NULL UNIQUE,    -- the file's name on disk, random hex
+    filename TEXT NOT NULL,              -- shown and downloaded under this name
+    kind TEXT NOT NULL CHECK (kind IN ('image', 'pdf', 'text', 'file')),
+    content_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    archived_at TEXT                     -- nullable; soft delete marker, NULL = active
+);
+CREATE INDEX attachments_item_id ON attachments(item_id);
 ```
 
 ## Design notes
@@ -66,6 +80,10 @@ CREATE TABLE item_tags (
 - **Multi-statement writes use `db.transaction()`.** Each helper write normally commits on its own. Inside a `with db.transaction(conn):` block they commit together, or all roll back if the block raises. Saving an item together with its tags uses this.
 
 - **Items use soft delete via `archived_at`** (nullable timestamp, NULL = active). Deleting an item ("removing" it from the UI) sets `archived_at` to the current timestamp (same format as `created_at`) instead of a hard `DELETE`, so notes and maintenance history survive a delete-then-regret (e.g. sold the water filter, replaced the whole unit). Default item list queries should filter `WHERE archived_at IS NULL`; a hard-delete/purge path can be added later if you actually want one. `ON DELETE CASCADE` on child tables still applies if an item row is ever truly purged.
+
+- **Attachments hold metadata only.** The bytes live on disk in `data/attachments/`, named by `stored_name`. Each attachment belongs to one item; notes and records only mention files by name, so a record's hard delete never affects one. Attachments are soft-deleted like items (`archived_at`), and the file stays on disk. `ON DELETE CASCADE` on `item_id` would remove the rows if an item were ever purged, but not the files: a purge would have to delete those itself.
+
+- **`attachments` uses `AUTOINCREMENT`; the other tables don't.** Without it, SQLite can reuse the id of a deleted last row. Previews are cached by URL (`/api/attachments/{id}/preview`) as immutable, so an id must never point at a different file. `AUTOINCREMENT` also creates SQLite's own `sqlite_sequence` table.
 
 - **Foreign keys are enabled per connection.** SQLite ships with FK enforcement off, and the setting doesn't persist in the file. `db.connect()` runs `PRAGMA foreign_keys = ON` on every connection; without it, `REFERENCES` and `ON DELETE CASCADE` are silently ignored.
 

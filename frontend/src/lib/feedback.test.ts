@@ -28,6 +28,10 @@ describe('saveErrorText', () => {
     expect(saveErrorText(403)).toMatch(/session expired/i)
   })
 
+  it('names the upload limit for 413', () => {
+    expect(saveErrorText(413)).toMatch(/too large \(max 50 MB\)/i)
+  })
+
   it('falls back to a generic retry message otherwise', () => {
     expect(saveErrorText(500)).toMatch(/try again/i)
     expect(saveErrorText(0)).toMatch(/try again/i)
