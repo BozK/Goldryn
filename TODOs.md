@@ -2,15 +2,7 @@
 
 ## High Priority / Features
 
-- **Deploy to the home server.** The Docker setup removes the Python 3.14 problem: the image brings its own Python. Steps are in `DEPLOY.md`.
-
 ## Medium Priority
-
-- **Rate limit logins.** The login endpoint is public, and nothing stops repeated guesses. bcrypt slows each attempt but doesn't cap them. Still to decide:
-  - **Where it lives.** A Cloudflare rate-limiting rule needs no code but sits outside the repo. An in-app limiter is testable and versioned. Doing both is also an option.
-  - **What it keys on.** The IP from `CF-Connecting-IP` (already parsed in `logger.py`), a global counter on the one account, or both. A global lockout also locks out the real user, so it probably needs a short window, not a hard lock.
-  - **Response.** 429 with `Retry-After`. `LoginScreen` currently shows "Try again" for anything other than 400/401, so it needs a "Too many attempts, wait N minutes" message.
-  - **State.** In memory, like sessions, so a restart clears it. That's acceptable for a single worker.
 
 ## Low Priority
 

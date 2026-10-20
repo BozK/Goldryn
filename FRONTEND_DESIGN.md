@@ -39,7 +39,7 @@ First save in "new" mode fires `POST /api/items`; the response's `id` is written
 
 - "Goldryn" title, username field, password field, login button — standard form, no surprises.
 - Submit → `POST /api/auth/login`. Backend sets the session cookie; frontend just needs to notice a 2xx and switch `viewMode`/render the Landing Page.
-- Failure → FeedbackToast shows an error ("Invalid username or password" on 400; generic "Try again" on 5xx).
+- Failure → FeedbackToast shows an error ("Invalid username or password" on 400; "Too many attempts — wait N minutes" on 429, with N from `Retry-After`; generic "Try again" on 5xx). The copy lives in `loginErrorText()` in `lib/feedback.ts`.
 
 ### 2. LandingPage
 

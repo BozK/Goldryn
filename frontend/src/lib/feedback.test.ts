@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
-import { isAuthFailure, rejectInvalid, saveErrorText } from './feedback'
+import { isAuthFailure, loginErrorText, rejectInvalid, saveErrorText } from './feedback'
 
 describe('isAuthFailure', () => {
   it('treats 401 and 403 as auth failures', () => {
@@ -31,6 +31,29 @@ describe('saveErrorText', () => {
   it('falls back to a generic retry message otherwise', () => {
     expect(saveErrorText(500)).toMatch(/try again/i)
     expect(saveErrorText(0)).toMatch(/try again/i)
+  })
+})
+
+describe('loginErrorText', () => {
+  it('calls out bad credentials for 400 and 401', () => {
+    expect(loginErrorText(400)).toBe('Invalid username or password')
+    expect(loginErrorText(401)).toBe('Invalid username or password')
+  })
+
+  it('rounds the Retry-After wait up to whole minutes for 429', () => {
+    expect(loginErrorText(429, 1)).toMatch(/wait 1 minute$/)
+    expect(loginErrorText(429, 60)).toMatch(/wait 1 minute$/)
+    expect(loginErrorText(429, 61)).toMatch(/wait 2 minutes$/)
+    expect(loginErrorText(429, 900)).toMatch(/wait 15 minutes$/)
+  })
+
+  it('still explains a 429 without Retry-After', () => {
+    expect(loginErrorText(429)).toMatch(/too many attempts/i)
+  })
+
+  it('falls back to a generic retry message otherwise', () => {
+    expect(loginErrorText(500)).toBe('Try again')
+    expect(loginErrorText(0)).toBe('Try again')
   })
 })
 

@@ -19,14 +19,17 @@ import type {
 /**
  * Thrown for any failed request. `status` is the HTTP status, or 0 when the
  * server couldn't be reached at all (treated like a 5xx by callers).
+ * `retryAfter` is the Retry-After header in seconds, when a 429 sends one.
  */
 export class ApiError extends Error {
   status: number
+  retryAfter?: number
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, retryAfter?: number) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.retryAfter = retryAfter
   }
 }
 
@@ -46,7 +49,8 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
   }
 
   if (!response.ok) {
-    throw new ApiError(response.status, `${method} ${path} failed with ${response.status}`)
+    const retryAfter = Number(response.headers.get('Retry-After')) || undefined
+    throw new ApiError(response.status, `${method} ${path} failed with ${response.status}`, retryAfter)
   }
 
   try {

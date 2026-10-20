@@ -1,0 +1,38 @@
+# Local development. The server uses compose.yaml instead (see DEPLOY.md).
+#
+#   docker compose -f compose.dev.yaml up --build         # app on http://127.0.0.1:8000 (./dev.sh)
+#   docker compose -f compose.dev.yaml run --rm test      # backend tests
+name: goldryn-dev
+
+x-build-args: &build-args
+  # The image needs a UID/GID for its goldryn user; any will do locally.
+  UID: 1000
+  GID: 1000
+
+services:
+  app:
+    build:
+      context: .
+      target: app
+      args: *build-args
+    env_file: .env
+    environment:
+      # Local is plain http, and browsers won't send a Secure cookie over it.
+      GOLDRYN_COOKIE_SECURE: "false"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+  test:
+    build:
+      context: .
+      target: test
+      args: *build-args
+    # Only started by `run`, never by `up`.
+    profiles: [test]
+    # The checkout's code, so tests run against the current edits without a rebuild.
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./pytest.ini:/app/pytest.ini:ro

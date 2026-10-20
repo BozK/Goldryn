@@ -48,27 +48,27 @@ frontend/src/
   useCreateThenUpdate.ts  save-on-blur: first save POSTs, later saves PATCH
   palette.ts          color name → {bg, accent}; unknown/null → Slate
 bruno/                one request per endpoint, runs in order
-dev.sh                build the frontend, then serve everything on :8000
+dev.sh                local: docker compose -f compose.dev.yaml up --build, on :8000
 dev.ps1               same, for PowerShell
-Dockerfile            production image: frontend build stage, then Python 3.14 serving on :8000
-compose.yaml          expects /srv/goldryn/{app,data,.env}; publishes it as 127.0.0.1:8002 only
+Dockerfile            frontend build stage, then Python 3.14 on :8000; targets `app` (default) and `test` (adds pytest)
+compose.yaml          server: expects /srv/goldryn/{app,data,.env}; publishes it as 127.0.0.1:8002 only
+compose.dev.yaml      local: `app` on 127.0.0.1:8000 with ./data and ./logs mounted; `test` runs pytest on the mounted backend/
 run.sh                on the server: docker compose up -d --build
 ```
 
 ## Commands
 
-Windows with Git Bash. On Linux/macOS, use `.venv/bin/` instead of `.venv/Scripts/`.
+The backend runs only in Docker, locally too: there's no venv. Python commands go through `compose.dev.yaml`.
 
 ```sh
-.venv/Scripts/pytest                              # backend tests
-.venv/Scripts/python backend/GoldrynBackend.py    # API (+ built frontend) on http://127.0.0.1:8000
+docker compose -f compose.dev.yaml run --rm test  # backend tests (mounts backend/, so no rebuild needed)
+./dev.sh                                          # build the image (frontend included), serve on http://127.0.0.1:8000
+.\dev.ps1                                          # same, from PowerShell
 cd frontend && npm run dev                        # Vite on :5173, proxies /api to :8000
 cd frontend && npm run format && npm run build && npm run lint && npm test
-./dev.sh                                          # build frontend + serve on :8000
-.\dev.ps1                                          # same, from PowerShell
 ```
 
-The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PASSWORD_HASH`, and `GOLDRYN_COOKIE_SECURE=false` for local http. Tests don't read `.env`; they build their own `Settings`. Don't set `TZ` in a Windows `.env`: Python there misreads IANA names like `America/New_York` and gets local time wrong.
+The app needs `.env` in the repo root (copy `.env.example`): `GOLDRYN_USERNAME` and `GOLDRYN_PASSWORD_HASH`. `compose.dev.yaml` sets `GOLDRYN_COOKIE_SECURE=false` for local http. Tests don't read `.env`; they build their own `Settings`. The image sets `TZ=America/New_York`; set `TZ` in `.env` to change it.
 
 ## Conventions and gotchas
 
@@ -92,6 +92,7 @@ The backend needs `.env` (copy `.env.example`): `GOLDRYN_USERNAME`, `GOLDRYN_PAS
   - 401: no or expired session. This is checked before body validation.
   - 404: missing or archived.
   - 422: validation failed.
+  - 429: too many login attempts from one IP (`LoginLimiter` in `auth.py`, 5 per 15 minutes, with `Retry-After`).
   - The frontend maps both 400 and 422 to the "Invalid data" toast.
 
 **Frontend**

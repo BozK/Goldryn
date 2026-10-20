@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, ApiError } from '../api/client'
+import { loginErrorText } from '../lib/feedback'
 
 interface LoginScreenProps {
   onLoggedIn: () => void
@@ -19,8 +20,8 @@ export function LoginScreen({ onLoggedIn, onError }: LoginScreenProps) {
       await api.login({ username, password })
       onLoggedIn()
     } catch (err) {
-      const status = err instanceof ApiError ? err.status : 0
-      onError(status === 400 || status === 401 ? 'Invalid username or password' : 'Try again')
+      const apiError = err instanceof ApiError ? err : undefined
+      onError(loginErrorText(apiError?.status ?? 0, apiError?.retryAfter))
       setIsSubmitting(false)
     }
   }
