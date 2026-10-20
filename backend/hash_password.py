@@ -1,7 +1,8 @@
 """
 Prompt for a password and print the GOLDRYN_PASSWORD_HASH line for .env.
 
-    .venv/Scripts/python backend/hash_password.py
+    docker compose -f compose.dev.yaml run --rm app python backend/hash_password.py   # local
+    docker compose run --rm goldryn python backend/hash_password.py                  # server
 """
 
 import sys

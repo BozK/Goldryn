@@ -3,37 +3,27 @@ Maintenance Tracker on Home Items/Projects
 
 ## Backend development
 
-Requires Python 3.14. On Windows, from the repo root:
+The backend runs in Docker, locally as well as on the server, so the only requirement is Docker (with Compose). The image brings its own Python 3.14. Local runs use `compose.dev.yaml`; the server uses `compose.yaml`.
+
+From the repo root:
 
 ```sh
-py -3.14 -m venv .venv
-.venv/Scripts/pip install -r requirements-dev.txt
-
 cp .env.example .env
-.venv/Scripts/python backend/hash_password.py   # paste the printed line into .env, set GOLDRYN_USERNAME,
-                                                # and uncomment GOLDRYN_COOKIE_SECURE=false
+docker compose -f compose.dev.yaml run --rm app python backend/hash_password.py
+# paste the printed line into .env, and set GOLDRYN_USERNAME
 
-.venv/Scripts/python backend/GoldrynBackend.py  # http://127.0.0.1:8000
-.venv/Scripts/pytest
+./dev.sh                                          # build the image (frontend included), serve on http://127.0.0.1:8000
+docker compose -f compose.dev.yaml run --rm test  # backend tests
 ```
 
-On Linux/macOS, use `.venv/bin/` instead of `.venv/Scripts/`. The SQLite file is created at `data/goldryn.db` on first start. Sessions live in memory, so run a single worker, and restarting the server logs you out.
+On Windows PowerShell, use `.\dev.ps1` instead of `./dev.sh`. Ctrl+C stops the server.
+
+- **Code changes:** `./dev.sh` rebuilds the image on every start, so restart it to pick up backend or frontend changes. The tests mount `backend/` from the checkout, so they always run the current code without a rebuild.
+- **Data:** `compose.dev.yaml` mounts `data/` and `logs/` from the repo. The SQLite file is created at `data/goldryn.db` on first start.
+- **Cookies:** `compose.dev.yaml` sets `GOLDRYN_COOKIE_SECURE=false`, because local is plain http.
+- **Sessions** live in memory, so the app runs as a single worker, and restarting it logs you out.
 
 Every API request and DB query is logged to `logs/Goldryn-YYYY-MM-DD.log` (a new file each local day) and echoed to the terminal. See "Logging" in `BACKEND_DESIGN.md`.
-
-To run it with uvicorn directly (e.g. with `--reload`), it's an app factory. `--no-access-log` stops uvicorn logging each request a second time:
-
-```sh
-.venv/Scripts/uvicorn GoldrynBackend:create_app --factory --app-dir backend --env-file .env --no-access-log
-```
-
-## Running it all
-
-```sh
-./dev.sh   # builds frontend/dist, then serves it and the API on http://127.0.0.1:8000
-```
-
-On Windows PowerShell, use `.\dev.ps1` instead. (`run.sh` is the server's Docker deploy script.)
 
 ## Deploying
 
