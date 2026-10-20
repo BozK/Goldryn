@@ -15,8 +15,9 @@ services:
     # No FORWARDED_ALLOW_IPS: the app takes the client IP from Cloudflare's
     # CF-Connecting-IP header (logger.py), never from the socket or X-Forwarded-For.
     ports:
-      # Keep the 127.0.0.1 prefix: Docker-published ports bypass ufw
-      - "127.0.0.1:8002:8002"
+      # Keep the 127.0.0.1 prefix: Docker-published ports bypass ufw.
+      # The app listens on 8000 in the container; 8000 and 8001 are taken on the host.
+      - "127.0.0.1:8002:8000"
     volumes:
       - ../data/db:/app/data
       - ../data/logs:/app/logs

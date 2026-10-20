@@ -91,6 +91,6 @@ The old container keeps serving until the new image builds. **The restart logs y
 
 ## Notes
 
-- **Keep `127.0.0.1:` in the `ports:` mapping.** Docker-published ports bypass ufw, so a bare `8002:8002` would expose the app to the LAN and the internet.
+- **Keep `127.0.0.1:` in the `ports:` mapping.** Docker-published ports bypass ufw, so a bare `8002:8000` would expose the app to the LAN and the internet.
 - **Client IPs** in the log come from Cloudflare's `CF-Connecting-IP` header, which Caddy passes through. The firewall only lets in Cloudflare's IPs, so the header can't be spoofed by connecting directly.
 - **Logs:** `docker compose logs -f` shows stdout/stderr. The app's own log is in `data/logs/`.

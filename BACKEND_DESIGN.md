@@ -160,7 +160,7 @@ Validation rules:
 
 - **No stored procedures.** SQLite doesn't support them in the Postgres/MySQL sense anyway, and nothing about this app's scale (single user, single process, low write volume) calls for pushing logic into the DB layer. Plain parameterized queries via small per-table helper functions, same pattern as ClipBackend's `get_user_by_username`.
 
-- **Single process, single worker.** Sessions live in memory (see auth above). Run it as `python backend/GoldrynBackend.py`, which serves the API and the built `frontend/dist` on 127.0.0.1:8000 (`GOLDRYN_HOST`/`GOLDRYN_PORT` override it), or use `./dev.sh` to build the frontend first. In production it runs in Docker (see `DEPLOY.md`). `GET /health` is an unauthenticated liveness check.
+- **Single process, single worker.** Sessions live in memory (see auth above). Run it as `python backend/GoldrynBackend.py`, which serves the API and the built `frontend/dist` on 127.0.0.1:8000, or use `./dev.sh` to build the frontend first. In production it runs in Docker (see `DEPLOY.md`): the Dockerfile sets `GOLDRYN_HOST=0.0.0.0`, and compose publishes container port 8000 as `127.0.0.1:8002`. `GET /health` is an unauthenticated liveness check.
 
 - **Tags are a field on the item, not a resource of their own.** The client sends names; the server finds or creates each tag and replaces the item's links in the same transaction as the item's other fields (`db.transaction()`), so the client never has to know whether a tag is new. `GET /api/tags` exists only for suggestions and leaves out tags no active item uses. No migration was needed: the `tags` / `item_tags` tables shipped in migration 1. Full design and the rejected alternatives: `TAGS_PHASE1.md`.
 
@@ -180,7 +180,7 @@ Every `/api/*` request and every DB query a route makes gets one line, in `backe
 2026-09-25 15:59:25 | DB | OK | items: UPDATE items SET next_maintenance_notes = ? WHERE id = ? AND archived_at IS NULL | ["Need a 3rd-party filter, not OEM", 1] | rowcount=1 | 4.9ms
 ```
 
-- **Where.** `logs/Goldryn-YYYY-MM-DD.log` (override the folder with `GOLDRYN_LOG_DIR`), also echoed to stderr. A new file starts at local midnight. Nothing is renamed or deleted: the files are the history. `DailyFileHandler` checks the date on each write and opens the new day's file itself, because `TimedRotatingFileHandler`'s rename at rollover is fragile on Windows.
+- **Where.** `logs/Goldryn-YYYY-MM-DD.log`, also echoed to stderr. A new file starts at local midnight. Nothing is renamed or deleted: the files are the history. `DailyFileHandler` checks the date on each write and opens the new day's file itself, because `TimedRotatingFileHandler`'s rename at rollover is fragile on Windows.
 - **What's not logged.** `/health`, the static frontend, `init_db()`/migrations and the `PRAGMA foreign_keys` in `db.connect()`. uvicorn's own access log is off, so requests aren't logged twice.
 - **Redaction.** Any `password` key in a logged body becomes `"***"`, at any depth, including where FastAPI's 422 detail echoes it back. Cookies, headers and the session id are never logged. A body that isn't JSON is logged only as `<N bytes, not JSON>`.
 - **Truncation.** Request, response, SQL params and DB rows are each cut to 200 characters, with `…(+N chars)`.

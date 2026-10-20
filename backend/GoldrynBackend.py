@@ -298,10 +298,9 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv(REPO_ROOT / ".env")
-    # The Docker image sets GOLDRYN_HOST=0.0.0.0: 127.0.0.1 inside a container
+    # The Dockerfile sets GOLDRYN_HOST=0.0.0.0: 127.0.0.1 inside a container
     # can't be reached from the host.
     host = os.getenv("GOLDRYN_HOST", "127.0.0.1")
-    port = int(os.getenv("GOLDRYN_PORT", "8000"))
     # One worker only: sessions live in this process's memory.
     # No access log: RequestLogMiddleware already logs every /api request.
-    uvicorn.run(create_app(), host=host, port=port, access_log=False)
+    uvicorn.run(create_app(), host=host, port=8000, access_log=False)
