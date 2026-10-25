@@ -110,7 +110,7 @@ def test_create_item_validation(client, payload):
     assert client.post("/api/items", json=payload).status_code == 422
 
 
-def test_list_items_in_creation_order_with_next_due(client):
+def test_list_items_with_next_due(client):
     filter_ = create_item(client, name="Filter", cadence_days=90)
     gutters = create_item(client, name="Gutters", cadence_days=180)
     furnace = create_item(client, name="Furnace")  # no cadence
@@ -127,6 +127,23 @@ def test_list_items_in_creation_order_with_next_due(client):
         # Records but no cadence: next_due null.
         {"id": furnace["id"], "name": "Furnace", "color": None, "cadence_days": None, "next_due": None},
     ]
+
+
+def test_list_items_order(client):
+    """Soonest due first (overdue lead), then everything without a due date; ties keep creation order."""
+    loose = create_item(client, name="Loose")  # no cadence, no records
+    fresh = create_item(client, name="Fresh", cadence_days=30)  # cadence, no records
+    later = create_item(client, name="Later", cadence_days=365)
+    overdue = create_item(client, name="Overdue", cadence_days=30)
+    tie = create_item(client, name="Tie", cadence_days=365)
+    logged = create_item(client, name="Logged")  # records, no cadence
+    create_record(client, later["id"], date="2026-08-15")  # due 2027-08-15
+    create_record(client, overdue["id"], date="2020-01-01")  # due 2020-01-31
+    create_record(client, tie["id"], date="2026-08-15")  # same due date as Later, created after it
+    create_record(client, logged["id"], date="2026-01-01")
+
+    names = [i["name"] for i in client.get("/api/items").json()]
+    assert names == ["Overdue", "Later", "Tie", "Loose", "Fresh", "Logged"]
 
 
 def test_list_items_empty(client):

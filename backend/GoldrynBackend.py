@@ -168,12 +168,22 @@ def find_attachment(conn: sqlite3.Connection, attachment_id: int) -> sqlite3.Row
 api_router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
 
 
+def list_order(item: ItemSummary) -> tuple:
+    """Soonest due first, so overdue items lead; items with no due date (no cadence or no history) go last.
+
+    Sorted here rather than in SQL so next_due() stays the one place the due date is computed.
+    """
+    return (0, item.next_due) if item.next_due is not None else (1,)
+
+
 @api_router.get("/items", response_model=list[ItemSummary])
 def list_items(conn: Conn):
-    return [
+    items = [
         ItemSummary(**dict(row), next_due=next_due(row["last_maintenance_date"], row["cadence_days"]))
         for row in db.list_items(conn)
     ]
+    # sorted() is stable, so ties (same due date, or no due date) keep the DB's creation order.
+    return sorted(items, key=list_order)
 
 
 @api_router.get("/items/{item_id}", response_model=ItemDetail)
