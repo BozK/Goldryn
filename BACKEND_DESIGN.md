@@ -102,6 +102,8 @@ GET    /api/attachments/{id}/preview      # 800px JPEG preview, images only
 }
 ```
 
+Items are ordered by `next_due`, soonest first, so overdue items lead. Items that have a cadence but no maintenance history come next, then items without a cadence. Ties keep creation order. The route handler sorts after computing `next_due`, so the due date is still computed in one place.
+
 Notes are ordered newest first (`created_at DESC, id DESC`), maintenance records by `date DESC, id DESC`, attachments newest first (`created_at DESC, id DESC`, active ones only).
 
 **`GET /api/tags`** — tags that at least one active item uses, most-used first, then by name:

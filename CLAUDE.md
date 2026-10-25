@@ -88,7 +88,7 @@ The app needs `.env` in the repo root (copy `.env.example`): `GOLDRYN_USERNAME` 
 - **Tags.** They're a `tags: string[]` field on items, not their own resource. The server lowercases the names, creates any new tag, and replaces the item's links in one `db.transaction()`. `GET /api/tags` exists only for suggestions. Max 3 per item.
 - **Archiving.** Deleting an item is a soft delete (`archived_at`). Archived items and their notes, records and attachments behave as 404 everywhere. Notes and records are hard-deleted. Attachments are soft-deleted like items, and their files stay on disk.
 - **Attachments.** They belong to an item only; a note or record mentions a file by name in its text. Files are stored under a random name, and their `kind` (`image`/`pdf`/`text`/`file`) comes from the bytes, never the filename. Only `image`, `pdf` and `text` are served `inline`; everything is served with `nosniff`. The upload route takes the raw `Request` so the session and size checks run before the body is read. `RequestLogMiddleware` never buffers non-JSON bodies, so keep it that way.
-- **`next_due`.** Computed only on the server, by `next_due()` in `GoldrynBackend.py`. The frontend never derives it.
+- **`next_due`.** Computed only on the server, by `next_due()` in `GoldrynBackend.py`. The frontend never derives it. `GET /api/items` sorts by it in Python (`list_order()`): soonest due first, then cadence with no history, then no cadence.
 - **Status codes.**
   - 400: bad login.
   - 401: no or expired session. This is checked before body validation.
