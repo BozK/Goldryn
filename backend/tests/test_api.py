@@ -130,7 +130,7 @@ def test_list_items_with_next_due(client):
 
 
 def test_list_items_order(client):
-    """Soonest due first (overdue lead), then cadence with no history, then no cadence; ties keep creation order."""
+    """Soonest due first (overdue lead), then everything without a due date; ties keep creation order."""
     loose = create_item(client, name="Loose")  # no cadence, no records
     fresh = create_item(client, name="Fresh", cadence_days=30)  # cadence, no records
     later = create_item(client, name="Later", cadence_days=365)
@@ -143,7 +143,7 @@ def test_list_items_order(client):
     create_record(client, logged["id"], date="2026-01-01")
 
     names = [i["name"] for i in client.get("/api/items").json()]
-    assert names == ["Overdue", "Later", "Tie", "Fresh", "Loose", "Logged"]
+    assert names == ["Overdue", "Later", "Tie", "Loose", "Fresh", "Logged"]
 
 
 def test_list_items_empty(client):
