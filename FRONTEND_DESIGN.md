@@ -105,15 +105,17 @@ Framer Motion handles both pieces:
 ## Color mapping
 
 - Backend `color` field is a generic name (e.g. `"Green"`), not a CSS value — the frontend owns the palette.
-- ~10 presets, each resolving to a darker background shade (card/header background) and a lighter accent shade (the notes/maintenance-record wrapper backgrounds), with white text throughout:
+- 20 presets, each resolving to a darker background shade (card/header background) and a lighter accent shade (the notes/maintenance-record wrapper backgrounds), with white text throughout:
 
   ```js
   const PALETTE = {
     Green: { bg: "#1b4332", accent: "#40916c" },
     Blue: { bg: "#1e3a5f", accent: "#4a7fb5" },
-    // ...~8 more
+    // ...18 more
   };
   ```
+
+- `PALETTE`'s insertion order is the picker's order: around the hue wheel, then the earthy and grey shades. Stored items keep a color's name, so a preset can be retuned but never renamed or removed. Every shade keeps white text at a contrast of at least 3:1.
 
 - App is dark-mode-by-default; no light theme planned for Phase 1.
 
